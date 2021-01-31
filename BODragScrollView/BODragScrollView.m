@@ -976,7 +976,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                 CGFloat dyembedtosc =\
                 [_embedView convertRect:_currentScrollView.frame fromView:_currentScrollView.superview].origin.y;
                 CGFloat scmints = embedmints + dyembedtosc;
-                CGFloat scmaxts = embedmaxts + dyembedtosc;
+                
                 CGFloat curscts = embedcurrts + dyembedtosc;
                 CGFloat scheight = CGRectGetHeight(_currentScrollView.frame);
                 CGFloat curscbs = curscts + scheight;
@@ -986,7 +986,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
 #if DEBUG
                 //内部bounces时，外部位置需要在最上/下（之上的逻辑需要处理完这种情况）
                 if (innercursc < 0) {
-                    
+                    CGFloat scmaxts = embedmaxts + dyembedtosc;
                     NSAssert(sf_uifloat_equal(curscts, scmaxts), @"innercursc < 0, curscts == scmaxts");
                 } else if (innercursc > innertotalsc) {
                     NSAssert(sf_uifloat_equal(curscts, scmints), @"innercursc < 0, curscts(%@) == scmints(%@)", @(curscts), @(scmints));
