@@ -1,0 +1,471 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 51;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		953F1F6025C259A10040AF83 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 953F1F5F25C259A10040AF83 /* AppDelegate.m */; };
+		953F1F6325C259A10040AF83 /* SceneDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 953F1F6225C259A10040AF83 /* SceneDelegate.m */; };
+		953F1F6625C259A10040AF83 /* ViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 953F1F6525C259A10040AF83 /* ViewController.m */; };
+		953F1F6925C259A10040AF83 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 953F1F6725C259A10040AF83 /* Main.storyboard */; };
+		953F1F6B25C259A30040AF83 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 953F1F6A25C259A30040AF83 /* Assets.xcassets */; };
+		953F1F6E25C259A30040AF83 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 953F1F6C25C259A30040AF83 /* LaunchScreen.storyboard */; };
+		953F1F7125C259A30040AF83 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 953F1F7025C259A30040AF83 /* main.m */; };
+		953F1F7B25C259B40040AF83 /* BODragScrollView.m in Sources */ = {isa = PBXBuildFile; fileRef = 953F1F7925C259B40040AF83 /* BODragScrollView.m */; };
+		953F22D825C659D10040AF83 /* DemoCollectionViewCell.m in Sources */ = {isa = PBXBuildFile; fileRef = 953F22CD25C659D10040AF83 /* DemoCollectionViewCell.m */; };
+		953F22E025C65EF70040AF83 /* CCUtil.m in Sources */ = {isa = PBXBuildFile; fileRef = 953F22DE25C65EF70040AF83 /* CCUtil.m */; };
+		953F22E825C679110040AF83 /* PlainVC.m in Sources */ = {isa = PBXBuildFile; fileRef = 953F22E725C679110040AF83 /* PlainVC.m */; };
+		953F22ED25C6BA560040AF83 /* InnerScrollViewVC.m in Sources */ = {isa = PBXBuildFile; fileRef = 953F22EC25C6BA560040AF83 /* InnerScrollViewVC.m */; };
+		A5E19C3CCF3B5C55155A6BC7 /* Pods_BODragScrollViewDemo.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5EE9027415E4FEA98E7E5B1E /* Pods_BODragScrollViewDemo.framework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		5EE9027415E4FEA98E7E5B1E /* Pods_BODragScrollViewDemo.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_BODragScrollViewDemo.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		7A71EA2DD328BE3CAD73C5C1 /* Pods-BODragScrollViewDemo.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-BODragScrollViewDemo.release.xcconfig"; path = "Target Support Files/Pods-BODragScrollViewDemo/Pods-BODragScrollViewDemo.release.xcconfig"; sourceTree = "<group>"; };
+		953F1F5B25C259A10040AF83 /* BODragScrollViewDemo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BODragScrollViewDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		953F1F5E25C259A10040AF83 /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
+		953F1F5F25C259A10040AF83 /* AppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AppDelegate.m; sourceTree = "<group>"; };
+		953F1F6125C259A10040AF83 /* SceneDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SceneDelegate.h; sourceTree = "<group>"; };
+		953F1F6225C259A10040AF83 /* SceneDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SceneDelegate.m; sourceTree = "<group>"; };
+		953F1F6425C259A10040AF83 /* ViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ViewController.h; sourceTree = "<group>"; };
+		953F1F6525C259A10040AF83 /* ViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ViewController.m; sourceTree = "<group>"; };
+		953F1F6825C259A10040AF83 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
+		953F1F6A25C259A30040AF83 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		953F1F6D25C259A30040AF83 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
+		953F1F6F25C259A30040AF83 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		953F1F7025C259A30040AF83 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		953F1F7925C259B40040AF83 /* BODragScrollView.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = BODragScrollView.m; sourceTree = "<group>"; };
+		953F1F7A25C259B40040AF83 /* BODragScrollView.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = BODragScrollView.h; sourceTree = "<group>"; };
+		953F22C125C659D10040AF83 /* DemoCollectionViewCell.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DemoCollectionViewCell.h; sourceTree = "<group>"; };
+		953F22CD25C659D10040AF83 /* DemoCollectionViewCell.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = DemoCollectionViewCell.m; sourceTree = "<group>"; };
+		953F22DD25C65ED30040AF83 /* PrefixHeader.pch */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PrefixHeader.pch; sourceTree = "<group>"; };
+		953F22DE25C65EF70040AF83 /* CCUtil.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = CCUtil.m; sourceTree = "<group>"; };
+		953F22DF25C65EF70040AF83 /* CCUtil.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = CCUtil.h; sourceTree = "<group>"; };
+		953F22E625C679110040AF83 /* PlainVC.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PlainVC.h; sourceTree = "<group>"; };
+		953F22E725C679110040AF83 /* PlainVC.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = PlainVC.m; sourceTree = "<group>"; };
+		953F22EB25C6BA560040AF83 /* InnerScrollViewVC.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = InnerScrollViewVC.h; sourceTree = "<group>"; };
+		953F22EC25C6BA560040AF83 /* InnerScrollViewVC.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = InnerScrollViewVC.m; sourceTree = "<group>"; };
+		D29863FE853DC72DC8520458 /* Pods-BODragScrollViewDemo.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-BODragScrollViewDemo.debug.xcconfig"; path = "Target Support Files/Pods-BODragScrollViewDemo/Pods-BODragScrollViewDemo.debug.xcconfig"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		953F1F5825C259A10040AF83 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A5E19C3CCF3B5C55155A6BC7 /* Pods_BODragScrollViewDemo.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		8343DBB91902234FDAFFA44F /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				D29863FE853DC72DC8520458 /* Pods-BODragScrollViewDemo.debug.xcconfig */,
+				7A71EA2DD328BE3CAD73C5C1 /* Pods-BODragScrollViewDemo.release.xcconfig */,
+			);
+			path = Pods;
+			sourceTree = "<group>";
+		};
+		953F1F5225C259A10040AF83 = {
+			isa = PBXGroup;
+			children = (
+				953F1F7825C259B40040AF83 /* BODragScrollView */,
+				953F1F5D25C259A10040AF83 /* BODragScrollViewDemo */,
+				953F1F5C25C259A10040AF83 /* Products */,
+				8343DBB91902234FDAFFA44F /* Pods */,
+				9CA5A0BFE520EE4EC5D3B0D4 /* Frameworks */,
+			);
+			sourceTree = "<group>";
+		};
+		953F1F5C25C259A10040AF83 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				953F1F5B25C259A10040AF83 /* BODragScrollViewDemo.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		953F1F5D25C259A10040AF83 /* BODragScrollViewDemo */ = {
+			isa = PBXGroup;
+			children = (
+				953F1F5E25C259A10040AF83 /* AppDelegate.h */,
+				953F1F5F25C259A10040AF83 /* AppDelegate.m */,
+				953F1F6125C259A10040AF83 /* SceneDelegate.h */,
+				953F1F6225C259A10040AF83 /* SceneDelegate.m */,
+				953F1F6425C259A10040AF83 /* ViewController.h */,
+				953F1F6525C259A10040AF83 /* ViewController.m */,
+				953F22BC25C659D10040AF83 /* helperUI */,
+				953F1F6725C259A10040AF83 /* Main.storyboard */,
+				953F1F6A25C259A30040AF83 /* Assets.xcassets */,
+				953F1F6C25C259A30040AF83 /* LaunchScreen.storyboard */,
+				953F1F6F25C259A30040AF83 /* Info.plist */,
+				953F1F7025C259A30040AF83 /* main.m */,
+				953F22DD25C65ED30040AF83 /* PrefixHeader.pch */,
+			);
+			path = BODragScrollViewDemo;
+			sourceTree = "<group>";
+		};
+		953F1F7825C259B40040AF83 /* BODragScrollView */ = {
+			isa = PBXGroup;
+			children = (
+				953F1F7A25C259B40040AF83 /* BODragScrollView.h */,
+				953F1F7925C259B40040AF83 /* BODragScrollView.m */,
+			);
+			path = BODragScrollView;
+			sourceTree = "<group>";
+		};
+		953F22BC25C659D10040AF83 /* helperUI */ = {
+			isa = PBXGroup;
+			children = (
+				953F22C125C659D10040AF83 /* DemoCollectionViewCell.h */,
+				953F22CD25C659D10040AF83 /* DemoCollectionViewCell.m */,
+				953F22DF25C65EF70040AF83 /* CCUtil.h */,
+				953F22DE25C65EF70040AF83 /* CCUtil.m */,
+				953F22E625C679110040AF83 /* PlainVC.h */,
+				953F22E725C679110040AF83 /* PlainVC.m */,
+				953F22EB25C6BA560040AF83 /* InnerScrollViewVC.h */,
+				953F22EC25C6BA560040AF83 /* InnerScrollViewVC.m */,
+			);
+			path = helperUI;
+			sourceTree = "<group>";
+		};
+		9CA5A0BFE520EE4EC5D3B0D4 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				5EE9027415E4FEA98E7E5B1E /* Pods_BODragScrollViewDemo.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		953F1F5A25C259A10040AF83 /* BODragScrollViewDemo */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 953F1F7425C259A30040AF83 /* Build configuration list for PBXNativeTarget "BODragScrollViewDemo" */;
+			buildPhases = (
+				46956DDE3DDEA28A7D06B16E /* [CP] Check Pods Manifest.lock */,
+				953F1F5725C259A10040AF83 /* Sources */,
+				953F1F5825C259A10040AF83 /* Frameworks */,
+				953F1F5925C259A10040AF83 /* Resources */,
+				3F1ACF6A172DDD872FF51997 /* [CP] Embed Pods Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = BODragScrollViewDemo;
+			productName = BODragScrollViewDemo;
+			productReference = 953F1F5B25C259A10040AF83 /* BODragScrollViewDemo.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		953F1F5325C259A10040AF83 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 1230;
+				TargetAttributes = {
+					953F1F5A25C259A10040AF83 = {
+						CreatedOnToolsVersion = 12.3;
+					};
+				};
+			};
+			buildConfigurationList = 953F1F5625C259A10040AF83 /* Build configuration list for PBXProject "BODragScrollViewDemo" */;
+			compatibilityVersion = "Xcode 9.3";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 953F1F5225C259A10040AF83;
+			productRefGroup = 953F1F5C25C259A10040AF83 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				953F1F5A25C259A10040AF83 /* BODragScrollViewDemo */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		953F1F5925C259A10040AF83 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				953F1F6E25C259A30040AF83 /* LaunchScreen.storyboard in Resources */,
+				953F1F6B25C259A30040AF83 /* Assets.xcassets in Resources */,
+				953F1F6925C259A10040AF83 /* Main.storyboard in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		3F1ACF6A172DDD872FF51997 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-BODragScrollViewDemo/Pods-BODragScrollViewDemo-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-BODragScrollViewDemo/Pods-BODragScrollViewDemo-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-BODragScrollViewDemo/Pods-BODragScrollViewDemo-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		46956DDE3DDEA28A7D06B16E /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-BODragScrollViewDemo-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		953F1F5725C259A10040AF83 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				953F1F6625C259A10040AF83 /* ViewController.m in Sources */,
+				953F22E825C679110040AF83 /* PlainVC.m in Sources */,
+				953F1F7B25C259B40040AF83 /* BODragScrollView.m in Sources */,
+				953F22E025C65EF70040AF83 /* CCUtil.m in Sources */,
+				953F22ED25C6BA560040AF83 /* InnerScrollViewVC.m in Sources */,
+				953F22D825C659D10040AF83 /* DemoCollectionViewCell.m in Sources */,
+				953F1F6025C259A10040AF83 /* AppDelegate.m in Sources */,
+				953F1F7125C259A30040AF83 /* main.m in Sources */,
+				953F1F6325C259A10040AF83 /* SceneDelegate.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXVariantGroup section */
+		953F1F6725C259A10040AF83 /* Main.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				953F1F6825C259A10040AF83 /* Base */,
+			);
+			name = Main.storyboard;
+			sourceTree = "<group>";
+		};
+		953F1F6C25C259A30040AF83 /* LaunchScreen.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				953F1F6D25C259A30040AF83 /* Base */,
+			);
+			name = LaunchScreen.storyboard;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
+/* Begin XCBuildConfiguration section */
+		953F1F7225C259A30040AF83 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+			};
+			name = Debug;
+		};
+		953F1F7325C259A30040AF83 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		953F1F7525C259A30040AF83 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = D29863FE853DC72DC8520458 /* Pods-BODragScrollViewDemo.debug.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 8ED2N2GBR7;
+				GCC_PRECOMPILE_PREFIX_HEADER = YES;
+				GCC_PREFIX_HEADER = BODragScrollViewDemo/PrefixHeader.pch;
+				INFOPLIST_FILE = BODragScrollViewDemo/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = Bo.BODragScrollViewDemo;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		953F1F7625C259A30040AF83 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 7A71EA2DD328BE3CAD73C5C1 /* Pods-BODragScrollViewDemo.release.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 8ED2N2GBR7;
+				GCC_PRECOMPILE_PREFIX_HEADER = YES;
+				GCC_PREFIX_HEADER = BODragScrollViewDemo/PrefixHeader.pch;
+				INFOPLIST_FILE = BODragScrollViewDemo/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = Bo.BODragScrollViewDemo;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		953F1F5625C259A10040AF83 /* Build configuration list for PBXProject "BODragScrollViewDemo" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				953F1F7225C259A30040AF83 /* Debug */,
+				953F1F7325C259A30040AF83 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		953F1F7425C259A30040AF83 /* Build configuration list for PBXNativeTarget "BODragScrollViewDemo" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				953F1F7525C259A30040AF83 /* Debug */,
+				953F1F7625C259A30040AF83 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 953F1F5325C259A10040AF83 /* Project object */;
+}

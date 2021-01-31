@@ -1,0 +1,17 @@
+//
+//  PrefixHeader.pch
+//  BODragScrollViewDemo
+//
+//  Created by bo on 2021/1/31.
+//
+
+#ifndef PrefixHeader_pch
+#define PrefixHeader_pch
+
+#import <Masonry/Masonry.h>
+#import "CCUtil.h"
+
+// Include any system framework and library headers here that should be included in all compilation units.
+// You will also need to set the Prefix Header build setting of one or more of your targets to reference this file.
+
+#endif /* PrefixHeader_pch */
