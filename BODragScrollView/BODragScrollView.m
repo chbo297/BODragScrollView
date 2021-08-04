@@ -13,7 +13,7 @@ NSInteger bo_findIdxInFloatArrayByValue(NSArray<NSNumber *> *ar,
                                         CGFloat value,
                                         BOOL nearby,
                                         BOOL ceil) {
-    //数组需要有序（升序），不重复
+    //ar需要有序（升序），不重复
     for (NSInteger i = 0; i < ar.count; i++) {
         CGFloat thef = ar[i].floatValue;
         if (value > thef) {
@@ -836,8 +836,12 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                                 curinnerosy = infbegin;
                                 innercursc = infoartotalsc;
                             } else if (curinnerosy > infend) {
-                                curinnerosy = infend;
-                                innercursc = infoartotalsc + inflength;
+                                if (innerdicidx < scinnerinfoar.count - 1) {
+                                    curinnerosy = infend;
+                                    innercursc = infoartotalsc + inflength;
+                                } else {
+                                    innercursc = infoartotalsc + (curinnerosy - infbegin);
+                                }
                             } else {
                                 innercursc = infoartotalsc + (curinnerosy - infbegin);
                             }
@@ -976,7 +980,6 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                 CGFloat dyembedtosc =\
                 [_embedView convertRect:_currentScrollView.frame fromView:_currentScrollView.superview].origin.y;
                 CGFloat scmints = embedmints + dyembedtosc;
-                
                 CGFloat curscts = embedcurrts + dyembedtosc;
                 CGFloat scheight = CGRectGetHeight(_currentScrollView.frame);
                 CGFloat curscbs = curscts + scheight;
@@ -1192,7 +1195,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                     }
                     
                     if (infoidx == _innerSVAttInfCount - 1) {
-                        inneroffset.y = theinfo.innerOffsetB;
+                        inneroffset.y = theinfo.innerOffsetB + innercursc - addtotalsc;
                         break;
                     }
                 }
@@ -1706,6 +1709,7 @@ static void *sf_observe_context = "sf_observe_context";
         CGRect embedf = _embedView.frame;
         CGFloat offsety = self.contentOffset.y;
         if (offsety < minosy) {
+            //头部bounces的情况
             CGFloat topext = minosy - offsety;
             
             if ((self.allowBouncesCardTop &&
@@ -1731,10 +1735,12 @@ static void *sf_observe_context = "sf_observe_context";
                 }
             }
         } else if (offsety < _minScrollInnerOSy) {
+            //正常滑动，还没有进入内部滑动范围
             innershouldosy = innerminosy - cinset.top;
             embedf.origin.y = 0;
             
         } else if (offsety <= _maxScrollInnerOSy) {
+            //进入了内部滑动范围
             CGFloat cursclength = 0;
             BOOL findtheinfo = NO;
             for (NSInteger infoidx = 0; infoidx < _innerSVAttInfCount; infoidx++) {
@@ -1763,7 +1769,8 @@ static void *sf_observe_context = "sf_observe_context";
                     } else {
                         cursclength += exty;
                         innershouldosy = innerscinfo.innerOffsetA + exty;
-                        isinnersc = YES;
+                        //exty是0的话，标识已经到外部了
+                        isinnersc = (exty > 0);
                     }
                     embedf.origin.y = cursclength;
                     
@@ -1780,10 +1787,12 @@ static void *sf_observe_context = "sf_observe_context";
             }
             
         } else if (offsety <= maxosy) {
+            //正常滑动，不在内部滑动范围
             innershouldosy = innermaxosy - cinset.top;
             embedf.origin.y = innertotalsc;
             
         } else {
+            //底部bounces情况
             CGFloat bottomext = offsety - maxosy;
             
             //means: offsety > maxosy
@@ -2680,7 +2689,9 @@ shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)otherGestureRec
     if (gestureRecognizer == _dsTapGes) {
         return YES;
     } else if (gestureRecognizer.view == self) {
-        if (otherGestureRecognizer.view == _currentScrollView) {
+        if (otherGestureRecognizer.view == self) {
+            return NO;
+        } else if (otherGestureRecognizer.view == _currentScrollView) {
             //滑动时只滑外部，内部由代码控制。所以不可以与内部捕获的scrollview手势共存，外部优先，取消内部scrollview的手势
             return NO;
         } else {
@@ -2731,7 +2742,13 @@ shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)otherGestureRec
                     if ([otherGestureRecognizer.view isKindOfClass:[UIScrollView class]]) {
                         return NO;
                     } else {
-                        return YES;
+                        NSInteger hier = [self __findViewHierarchy:otherGestureRecognizer.view];
+                        if (_currentScrollView && hier >= 2) {
+                            //与内部scrollview内的手势不共存
+                            return NO;
+                        } else {
+                            return YES;
+                        }
                     }
                 }
             } else {
