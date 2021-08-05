@@ -747,9 +747,8 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         UIEdgeInsets cinset = sf_common_contentInset(_currentScrollView);
         CGFloat innertotalsc = 0;
         CGFloat oriinnerosy = _currentScrollView.contentOffset.y;
-        CGFloat curinnerosy = oriinnerosy;
-        //当前一共滑了多远
-        CGFloat innercursc = curinnerosy + cinset.top;
+        //当前内部一共滑了多远
+        CGFloat innercursc = oriinnerosy + cinset.top;
         
         NSArray<NSDictionary *> *scinnerinfoar = nil;
         if (self.dragScrollDelegate && [self.dragScrollDelegate respondsToSelector:@selector(dragScrollView:scrollBehaviorForInnerSV:)]) {
@@ -776,134 +775,12 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         BOOL specialinnersc = NO;
         //向下-1  向上1  没有是0
         NSInteger innerscmayinother = 0;
-        
         NSInteger findwhichidx = -1;
-        BOOL innerinfocomplete = NO; //初始化内部scrollView滑动是否完成
-        if (scinnerinfoar.count > 0) {
-            //若指定了内部的滑动行为
-            
-            BODragScrollAttachInfo lastatinfo;
-            CGFloat infoartotalsc = 0;
-            BOOL haslastinfo = NO;
-            for (NSInteger innerdicidx = 0; innerdicidx < scinnerinfoar.count; innerdicidx++) {
-                NSDictionary *innerscdic = scinnerinfoar[innerdicidx];
-                NSNumber *dhval = [innerscdic objectForKey:@"displayH"];
-                NSNumber *beginval = [innerscdic objectForKey:@"beginOffsetY"];
-                NSNumber *endval = [innerscdic objectForKey:@"endOffsetY"];
-                if ((nil == dhval)
-                    || (nil == beginval)
-                    || (nil == endval)) {
-                    continue;
-                }
-                
-                CGFloat infodh = dhval.floatValue;
-                CGFloat infbegin = beginval.floatValue;
-                CGFloat infend = endval.floatValue;
-                
-                //有效判断,不需要判断了吧 浪费资源 先由外部保障传入
-                //                    if (infend <= infbegin) {
-                //                        //击毁
-                //                        break;
-                //                    }
-                //
-                //                    if (lastdhval) {
-                //                        if (infodh <= lastdhval.floatValue) {
-                //                            //击毁
-                //                            break;
-                //                        }
-                //                    }
-                //                    lastdhval = dhval;
-                //                    if (lastendval) {
-                //                        if (infbegin < lastendval.floatValue) {
-                //                            //击毁
-                //                            break;
-                //                        }
-                //                    }
-                //                    lastendval = endval;
-                
-                
-                CGFloat inflength = infend - infbegin;
-                CGFloat infosy = infoartotalsc + infodh - sfh;
-                BODragScrollAttachInfo atinf =\
-                (BODragScrollAttachInfo){infodh, infosy, YES, infbegin, infend, infosy + inflength};
-                if (haslastinfo && atinf.dragSVOffsetY <= lastatinfo.dragSVOffsetY) {
-                    //数据非法
-                    continue;
-                }
-                
-                if (findwhichidx < 0) {
-                    CGFloat curmaydh = (sfh - embedcurrts); //计算完后当前展示高度
-                    if (infodh + onepxiel >= curmaydh) {
-                        findwhichidx = innerdicidx;
-                        
-                        //判断当前内部滑动位置是否合法，若不在合适位置，进行复位
-                        //scinnerar情况下暂不考虑autoResetInnerSVOffsetWhenAttachMiss 可后续再扩展
-                        if (curmaydh < infodh - onepxiel) {
-                            if (curinnerosy > infbegin) {
-                                curinnerosy = infbegin;
-                                innercursc = infoartotalsc;
-                                innerscmayinother = 1;
-                            } else {
-                                if (haslastinfo) {
-                                    if (curinnerosy < lastatinfo.innerOffsetB) {
-                                        curinnerosy = lastatinfo.innerOffsetB;
-                                    }
-                                    innercursc = infoartotalsc;
-                                } else {
-                                    innercursc = 0;
-                                }
-                            }
-                        } else if (curmaydh <= infodh + onepxiel) {
-                            if (curinnerosy < infbegin) {
-                                curinnerosy = infbegin;
-                                innercursc = infoartotalsc;
-                            } else if (curinnerosy > infend) {
-                                if (innerdicidx < scinnerinfoar.count - 1) {
-                                    curinnerosy = infend;
-                                    innercursc = infoartotalsc + inflength;
-                                } else {
-                                    innercursc = infoartotalsc + (curinnerosy - infbegin);
-                                }
-                            } else {
-                                innercursc = infoartotalsc + (curinnerosy - infbegin);
-                                specialinnersc = YES;
-                            }
-                        }
-                    } else if (scinnerinfoar.count - 1 == innerdicidx) {
-                        findwhichidx = innerdicidx;
-                        if (curinnerosy < infend) {
-                            curinnerosy = infend;
-                            innercursc = infoartotalsc + inflength;
-                            innerscmayinother = -1;
-                        } else {
-                            innercursc = infoartotalsc + (curinnerosy - infbegin);
-                        }
-                    }
-                }
-                
-                //插入内部滑动点
-                innerinfoar[innerinfocount] = atinf;
-                innerinfocount++;
-                infoartotalsc += inflength;
-                lastatinfo = atinf;
-                if (!haslastinfo) {
-                    haslastinfo = YES;
-                }
-            }
-            
-            innertotalsc = infoartotalsc;
-            
-            if (innerinfocount > 0) {
-                //获得了有效的内部滑动行为，内部滑动行为加载完成
-                innerinfocomplete = YES;
-            }
-        } else {
-            //没有从代理获得有效的内部滑动行为，使用默认的内部滑动行为
-            innertotalsc = (cinset.top
-                            + _currentScrollView.contentSize.height
-                            + cinset.bottom
-                            - CGRectGetHeight(_currentScrollView.bounds));
-        }
+        
+        innertotalsc = (cinset.top
+                        + _currentScrollView.contentSize.height
+                        + cinset.bottom
+                        - CGRectGetHeight(_currentScrollView.bounds));
         
         BOOL caninnerscroll = (innertotalsc > 0);
         
@@ -997,10 +874,131 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                     bottombounces = MAX(m_bottomextinner, 0);
                 }
             }
-            //临时使用，后续将后面的判断逻辑合并到上面，oldjudge就不需要了
-            BOOL oldjudge = NO;
+            
+            BOOL innerinfocomplete = NO; //初始化内部scrollView滑动是否完成
+            
+            if (scinnerinfoar.count > 0) {
+                //若指定了内部的滑动行为
+                
+                BODragScrollAttachInfo lastatinfo;
+                CGFloat infoartotalsc = 0;
+                BOOL haslastinfo = NO;
+                for (NSInteger innerdicidx = 0; innerdicidx < scinnerinfoar.count; innerdicidx++) {
+                    NSDictionary *innerscdic = scinnerinfoar[innerdicidx];
+                    NSNumber *dhval = [innerscdic objectForKey:@"displayH"];
+                    NSNumber *beginval = [innerscdic objectForKey:@"beginOffsetY"];
+                    NSNumber *endval = [innerscdic objectForKey:@"endOffsetY"];
+                    if ((nil == dhval)
+                        || (nil == beginval)
+                        || (nil == endval)) {
+                        continue;
+                    }
+                    
+                    CGFloat infodh = dhval.floatValue;
+                    CGFloat infbegin = beginval.floatValue;
+                    CGFloat infend = endval.floatValue;
+                    
+                    //有效判断,不需要判断了吧 浪费资源 由外部保障传入即可
+                    //                    if (infend <= infbegin) {
+                    //                        //击毁
+                    //                        break;
+                    //                    }
+                    //
+                    //                    if (lastdhval) {
+                    //                        if (infodh <= lastdhval.floatValue) {
+                    //                            //击毁
+                    //                            break;
+                    //                        }
+                    //                    }
+                    //                    lastdhval = dhval;
+                    //                    if (lastendval) {
+                    //                        if (infbegin < lastendval.floatValue) {
+                    //                            //击毁
+                    //                            break;
+                    //                        }
+                    //                    }
+                    //                    lastendval = endval;
+                    
+                    CGFloat inflength = infend - infbegin;
+                    CGFloat infosy = infoartotalsc + infodh - sfh;
+                    BODragScrollAttachInfo atinf =\
+                    (BODragScrollAttachInfo){infodh, infosy, YES, infbegin, infend, infosy + inflength};
+                    if (haslastinfo && atinf.dragSVOffsetY <= lastatinfo.dragSVOffsetY) {
+                        //数据非法
+                        continue;
+                    }
+                    
+                    if (findwhichidx < 0) {
+                        CGFloat curinnerosy = innercursc - cinset.top;
+                        CGFloat curmaydh = (sfh - embedcurrts); //计算完后当前展示高度
+                        if (infodh + onepxiel >= curmaydh) {
+                            findwhichidx = innerdicidx;
+                            
+                            //判断当前内部滑动位置是否合法，若不在合适位置，进行复位
+                            //scinnerar情况下暂不考虑autoResetInnerSVOffsetWhenAttachMiss 可后续再扩展
+                            if (curmaydh < infodh - onepxiel) {
+                                if (curinnerosy > infbegin) {
+                                    curinnerosy = infbegin;
+                                    innercursc = infoartotalsc;
+                                    innerscmayinother = 1;
+                                } else {
+                                    if (haslastinfo) {
+                                        if (curinnerosy < lastatinfo.innerOffsetB) {
+                                            curinnerosy = lastatinfo.innerOffsetB;
+                                        }
+                                        innercursc = infoartotalsc;
+                                    } else {
+                                        innercursc = 0;
+                                    }
+                                }
+                            } else if (curmaydh <= infodh + onepxiel) {
+                                if (curinnerosy < infbegin) {
+                                    curinnerosy = infbegin;
+                                    innercursc = infoartotalsc;
+                                } else if (curinnerosy > infend) {
+                                    if (innerdicidx < scinnerinfoar.count - 1) {
+                                        curinnerosy = infend;
+                                        innercursc = infoartotalsc + inflength;
+                                    } else {
+                                        innercursc = infoartotalsc + (curinnerosy - infbegin);
+                                    }
+                                } else {
+                                    innercursc = infoartotalsc + (curinnerosy - infbegin);
+                                    specialinnersc = YES;
+                                }
+                            }
+                        } else if (scinnerinfoar.count - 1 == innerdicidx) {
+                            findwhichidx = innerdicidx;
+                            if (curinnerosy < infend) {
+                                curinnerosy = infend;
+                                innercursc = infoartotalsc + inflength;
+                                innerscmayinother = -1;
+                            } else {
+                                innercursc = infoartotalsc + (curinnerosy - infbegin);
+                            }
+                        }
+                    }
+                    
+                    //插入内部滑动点
+                    innerinfoar[innerinfocount] = atinf;
+                    innerinfocount++;
+                    infoartotalsc += inflength;
+                    lastatinfo = atinf;
+                    if (!haslastinfo) {
+                        haslastinfo = YES;
+                    }
+                }
+                
+                innertotalsc = infoartotalsc;
+                
+                if (innerinfocount > 0) {
+                    //获得了有效的内部滑动行为，内部滑动行为加载完成
+                    innerinfocomplete = YES;
+                }
+            }
+            
+            //没有指定的行为，启用智能判定
             if (!innerinfocomplete) {
-                oldjudge = YES;
                 CGFloat dyembedtosc =\
                 [_embedView convertRect:_currentScrollView.frame fromView:_currentScrollView.superview].origin.y;
                 CGFloat scmints = embedmints + dyembedtosc;
@@ -1134,7 +1132,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
             
             //innercursc  embedcurrts  topbounces  bottombounces
             CGPoint inneroffset = _currentScrollView.contentOffset;
-            if (!oldjudge && _innerSVAttInfCount > 0) {
+            if (_innerSVAttInfCount > 0) {
                 CGFloat addtotalsc = 0;
                 for (NSInteger infoidx = 0; infoidx < _innerSVAttInfCount; infoidx++) {
                     BODragScrollAttachInfo theinfo = _innerSVAttInfAr[infoidx];
@@ -1151,8 +1149,6 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                         break;
                     }
                 }
-            } else {
-                inneroffset.y = innercursc - cinset.top;
             }
             
             BOOL hasbounces = NO;
