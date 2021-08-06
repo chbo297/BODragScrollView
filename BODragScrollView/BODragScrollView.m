@@ -297,6 +297,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
     //innerscroll已经滑动过了，当前对应的attach点可能在下部-1   可能在上部1。没有时为0
     NSInteger _missAttachAndNeedsReload;
     BOOL _forceResetInnerScrollOffsetY;
+    NSMutableDictionary *_innerSVBehaviorInfo;
     
     __weak UIControl *_theCtrWhenDecInner; //decelerating时点击了某UIControl，为了不使scrollView的系统机制无效其点击事件，手动传递action
     BOOL _lastScrollIsInner; //最后一次滑动位置变化（包括内外），是否是捕获的内部sv
@@ -402,7 +403,41 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
     return YES;
 }
 
-- (UIScrollView *)__seekTargetScrollViewFrom:(UIView *)view {
+- (NSInteger)__priorityBehaviorForInnerSV:(UIScrollView *)sv {
+    NSArray<NSDictionary *> *otherscar = _innerSVBehaviorInfo ? [_innerSVBehaviorInfo objectForKey:@"otherSVBehaviorAr"] : nil;
+    if (otherscar
+        && [otherscar isKindOfClass:[NSArray class]]
+        && otherscar.count > 0) {
+        
+        __block NSInteger prioritybeg = NSNotFound;
+        [otherscar enumerateObjectsUsingBlock:^(NSDictionary * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+            UIScrollView *objsv = [obj objectForKey:@"sv"];
+            if (objsv == sv) {
+                NSNumber *priorityobj = [obj objectForKey:@"priority"];
+                if (nil != priorityobj) {
+                    prioritybeg = priorityobj.integerValue;
+                }
+                *stop = YES;
+            }
+        }];
+        
+        return prioritybeg;
+    } else {
+        return NSNotFound;
+    }
+}
+
+/*
+ 有监测到超过1个可捕获的scrollView时，才会往svBehaviorDic里塞内容，否则svBehaviorDic没意义就不塞内容
+ */
+- (UIScrollView *)__seekTargetScrollViewFrom:(UIView *)view svBehaviorDic:(NSMutableDictionary *)svBehaviorDic {
+    
+    NSMutableArray<NSMutableDictionary *> *svbehar;
+    if (svBehaviorDic) {
+        svbehar = @[].mutableCopy;
+    }
+    
+    //优先级：可滑动的ScrollView > tag标记的 > 智能判断高度最高的，都没有传nil; force=YES，相同时也刷新being和end点
     UIScrollView *forwardsc = nil; //被tag标记 可能需要加载的scrollView
     UIScrollView *maxhsc = nil; //高度最大的scrollView
     UIScrollView *thsc = nil;   //寻找第一个可滑动的scrollView
@@ -422,27 +457,49 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
             }
             
             if (scvalid) {
+                NSMutableDictionary *scdic;
+                if (svbehar) {
+                    scdic = @{}.mutableCopy;
+                    [scdic setObject:scv forKey:@"sv"];
+                }
+                
+                NSInteger priority = 0;
+                
                 UIEdgeInsets inset = sf_common_contentInset(scv);
                 //是否能竖向滑动
-                if (scv.contentSize.height + inset.top + inset.bottom > CGRectGetHeight(scv.bounds)) {
+                if (!thsc
+                    && ((scv.contentSize.height + inset.top + inset.bottom)
+                        > CGRectGetHeight(scv.bounds))) {
                     thsc = scv;
-                    break;
+                    if (!svbehar) {
+                        break;
+                    }
                 } else {
                     if (!forwardsc &&
                         scv.tag > 0 &&
                         (0 == (scv.tag % bo_dragcard_forward_observer_scrollview_tag_r))) {
                         //记录暂不能滑动，但是tag符合forward_observer的scrollview
                         forwardsc = scv;
-                    } else if (scv.contentSize.width + inset.left + inset.right <= CGRectGetWidth(scv.bounds)) {
-                        //非横向滑动scrollView默认找最高的
-                        if (!maxhsc) {
-                            maxhsc = scv;
-                        } else {
-                            if (CGRectGetHeight(scv.frame) > CGRectGetHeight(maxhsc.frame)) {
+                    } else {
+                        if (scv.contentSize.width + inset.left + inset.right <= CGRectGetWidth(scv.bounds)) {
+                            //非横向滑动scrollView默认找最高的
+                            if (!maxhsc) {
                                 maxhsc = scv;
+                            } else {
+                                if (CGRectGetHeight(scv.frame) > CGRectGetHeight(maxhsc.frame)) {
+                                    maxhsc = scv;
+                                }
                             }
+                        } else {
+                            //横滑scv，不共存，不指定优先级，走系统默认行为
+                            priority = 2;
                         }
                     }
+                }
+                
+                if (scdic) {
+                    [scdic setObject:@(priority) forKey:@"priority"];
+                    [svbehar addObject:scdic];
                 }
             }
         }
@@ -450,7 +507,27 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         resp = resp.nextResponder;
     }
     
-    return (thsc ? : (forwardsc ? : maxhsc));
+    UIScrollView *selsc = (thsc ? : (forwardsc ? : maxhsc));
+    
+    if (svBehaviorDic && svbehar.count > 1) {
+        __block NSMutableDictionary *catchscdic;
+        [svbehar enumerateObjectsUsingBlock:^(NSMutableDictionary * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+            UIScrollView *objsc = [obj objectForKey:@"sv"];
+            if (objsc == selsc) {
+                catchscdic = obj;
+                *stop = YES;
+            }
+        }];
+        
+        if (catchscdic) {
+            [svbehar removeObject:catchscdic];
+        }
+        
+        [svBehaviorDic setObject:selsc forKey:@"catchSV"];
+        [svBehaviorDic setObject:svbehar forKey:@"otherSVBehaviorAr"];
+    }
+    
+    return selsc;
 }
 
 - (BOOL)touchesShouldBegin:(NSSet<UITouch *> *)touches
@@ -467,8 +544,20 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         [_theCtrWhenDecInner sendActionsForControlEvents:UIControlEventTouchDown];
     }
     
-    //优先级：可滑动的ScrollView > tag标记的 > 智能判断高度最高的，都没有传nil; force=YES，相同时也刷新being和end点
-    [self __setupCurrentScrollView:[self __seekTargetScrollViewFrom:view]];
+    _innerSVBehaviorInfo = nil;
+    NSMutableDictionary *svbehaviordic = @{}.mutableCopy;
+    UIScrollView *selscv = [self __seekTargetScrollViewFrom:view svBehaviorDic:svbehaviordic];
+    if (svbehaviordic.count > 0) {
+        if (self.dragScrollDelegate
+            && [self.dragScrollDelegate respondsToSelector:@selector(dragScrollView:innerSVBehavior:)]) {
+            [self.dragScrollDelegate dragScrollView:self innerSVBehavior:svbehaviordic];
+            selscv = [svbehaviordic objectForKey:@"catchSV"] ? : selscv;
+        }
+        
+        _innerSVBehaviorInfo = svbehaviordic;
+    }
+    
+    [self __setupCurrentScrollView:selscv];
     return [super touchesShouldBegin:touches withEvent:event inContentView:view];
 }
 
@@ -541,7 +630,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
             }
         } else {
             //若滑动的自身，不响应惯性或动画中非scrollView的子内容，只停止本身的滑动
-            return [self __seekTargetScrollViewFrom:htv] ? : self;
+            return [self __seekTargetScrollViewFrom:htv svBehaviorDic:nil] ? : self;
         }
     } else {
         //如果层级中有scrollView处于惯性过程，直接响应到该scrollView不响应内部
@@ -2624,7 +2713,23 @@ shouldRequireFailureOfGestureRecognizer:(UIGestureRecognizer *)otherGestureRecog
                 }
             }
             
-            return NO;
+            if ([otherGestureRecognizer.view isKindOfClass:[UIScrollView class]]) {
+                NSInteger prioritybeg = [self __priorityBehaviorForInnerSV:(id)otherGestureRecognizer.view];
+                switch (prioritybeg) {
+                    case -1:
+                        return NO;
+                    case 0:
+                        return NO;
+                    case 1:
+                        return YES;
+                    case 2:
+                        return NO;
+                    default:
+                        return NO;
+                }
+            } else {
+                return NO;
+            }
         }
     } else {
         return NO;
@@ -2668,7 +2773,23 @@ shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)otherGestureRec
                 //若shouldFailureOtherTapGestureWhenDecelerating=YES则无效其他View的本次tap
                 return self.shouldFailureOtherTapGestureWhenDecelerating ? YES : NO;
             } else {
-                return NO;
+                if ([otherGestureRecognizer.view isKindOfClass:[UIScrollView class]]) {
+                    NSInteger prioritybeg = [self __priorityBehaviorForInnerSV:(id)otherGestureRecognizer.view];
+                    switch (prioritybeg) {
+                        case -1:
+                            return YES;
+                        case 0:
+                            return NO;
+                        case 1:
+                            return NO;
+                        case 2:
+                            return NO;
+                        default:
+                            return NO;
+                    }
+                } else {
+                    return NO;
+                }
             }
         }
     } else {
@@ -2736,11 +2857,27 @@ shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)otherGestureRec
                         return self.shouldFailureOtherTapGestureWhenDecelerating ? NO : YES;
                     }
                 } else {
+                    NSInteger hier = [self __findViewHierarchy:otherGestureRecognizer.view];
                     //UIScrollView不共存
                     if ([otherGestureRecognizer.view isKindOfClass:[UIScrollView class]]) {
-                        return NO;
+                        if (hier >= 1) {
+                            NSInteger prioritybeg = [self __priorityBehaviorForInnerSV:(id)otherGestureRecognizer.view];
+                            switch (prioritybeg) {
+                                case -1:
+                                    return NO;
+                                case 0:
+                                    return YES;
+                                case 1:
+                                    return NO;
+                                case 2:
+                                    return NO;
+                                default:
+                                    return NO;
+                            }
+                        } else {
+                            return NO;
+                        }
                     } else {
-                        NSInteger hier = [self __findViewHierarchy:otherGestureRecognizer.view];
                         if (_currentScrollView && hier >= 2) {
                             //与内部scrollview内的手势不共存
                             return NO;
