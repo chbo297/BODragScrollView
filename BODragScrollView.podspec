@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name         = "BODragScrollView"
-  s.version      = "0.0.1"
+  s.version      = "0.0.2"
   s.summary      = "Scroll Card Interaction"
 
   s.description  = "Scroll Card Interaction"
