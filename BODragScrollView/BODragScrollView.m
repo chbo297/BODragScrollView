@@ -274,6 +274,8 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
 
 @property (nonatomic, assign) BOOL isScrollAnimating;
 
+@property (nonatomic, strong) NSNumber *needsAnimatedToH;
+
 @end
 
 @implementation BODragScrollView {
@@ -658,7 +660,19 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         nil != _embedView) {
         BOOL newlayoutembed = (NO == _hasLayoutEmbedView);
         _hasLayoutEmbedView = YES;
-        
+        if (_needsAnimatedToH) {
+            __weak typeof(self) ws = self;
+            [[NSOperationQueue mainQueue] addOperationWithBlock:^{
+                if (!ws.needsAnimatedToH) {
+                    return;
+                }
+                CGFloat needsath = ws.needsAnimatedToH.floatValue;
+                ws.needsAnimatedToH = nil;
+                if (!sf_uifloat_equal(needsath, ws.currDisplayH)) {
+                    [ws scrollToDisplayH:needsath animated:YES];
+                }
+            }];
+        }
         CGRect embedrect = self.embedView.frame;
         CGSize cardsize = embedrect.size;
         CGFloat displayh;
@@ -1522,8 +1536,16 @@ static void *sf_observe_context = "sf_observe_context";
         
         validdisplayH = displayH;
         if (!_hasLayoutEmbedView) {
-            //还没有进行首次布局，赋值标记位，到开始布局的时候应用该高度
-            _needsDisplayH = @(displayH);
+            if (animated) {
+                //添加待播动画
+                _needsAnimatedToH = @(displayH);
+            } else {
+                //清空待播动画
+                _needsAnimatedToH = nil;
+                //还没有进行首次布局，赋值标记位，到开始布局的时候应用该高度
+                _needsDisplayH = @(displayH);
+            }
+            
         } else {
             CGPoint os = self.contentOffset;
             CGFloat sfh = CGRectGetHeight(self.bounds);
