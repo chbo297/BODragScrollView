@@ -525,7 +525,9 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
             [svbehar removeObject:catchscdic];
         }
         
-        [svBehaviorDic setObject:selsc forKey:@"catchSV"];
+        if (selsc) {
+            [svBehaviorDic setObject:selsc forKey:@"catchSV"];
+        }
         [svBehaviorDic setObject:svbehar forKey:@"otherSVBehaviorAr"];
     }
     
@@ -660,10 +662,10 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         nil != _embedView) {
         BOOL newlayoutembed = (NO == _hasLayoutEmbedView);
         _hasLayoutEmbedView = YES;
-        if (_needsAnimatedToH) {
+        if (nil != _needsAnimatedToH) {
             __weak typeof(self) ws = self;
             [[NSOperationQueue mainQueue] addOperationWithBlock:^{
-                if (!ws.needsAnimatedToH) {
+                if (nil == ws.needsAnimatedToH) {
                     return;
                 }
                 CGFloat needsath = ws.needsAnimatedToH.floatValue;
@@ -1041,14 +1043,10 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                             //scinnerar情况下暂不考虑autoResetInnerSVOffsetWhenAttachMiss 可后续再扩展
                             if (curmaydh < infodh - onepxiel) {
                                 if (curinnerosy > infbegin) {
-                                    curinnerosy = infbegin;
                                     innercursc = infoartotalsc;
                                     innerscmayinother = 1;
                                 } else {
                                     if (haslastinfo) {
-                                        if (curinnerosy < lastatinfo.innerOffsetB) {
-                                            curinnerosy = lastatinfo.innerOffsetB;
-                                        }
                                         innercursc = infoartotalsc;
                                     } else {
                                         innercursc = 0;
@@ -1056,11 +1054,9 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                                 }
                             } else if (curmaydh <= infodh + onepxiel) {
                                 if (curinnerosy < infbegin) {
-                                    curinnerosy = infbegin;
                                     innercursc = infoartotalsc;
                                 } else if (curinnerosy > infend) {
                                     if (innerdicidx < scinnerinfoar.count - 1) {
-                                        curinnerosy = infend;
                                         innercursc = infoartotalsc + inflength;
                                     } else {
                                         innercursc = infoartotalsc + (curinnerosy - infbegin);
@@ -1073,7 +1069,6 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                         } else if (scinnerinfoar.count - 1 == innerdicidx) {
                             findwhichidx = innerdicidx;
                             if (curinnerosy < infend) {
-                                curinnerosy = infend;
                                 innercursc = infoartotalsc + inflength;
                                 innerscmayinother = -1;
                             } else {
@@ -1616,13 +1611,7 @@ static void *sf_observe_context = "sf_observe_context";
                 doblock();
             } else {
                 //还没有渲染到屏幕上，待渲染完成后再滑动
-                void (^orgbk)(void) = [CATransaction.completionBlock copy];
-                [CATransaction setCompletionBlock:^{
-                    if (orgbk) {
-                        orgbk();
-                    }
-                    doblock();
-                }];
+                [[NSOperationQueue mainQueue] addOperationWithBlock:doblock];
             }
         }
     }
@@ -1739,11 +1728,7 @@ static void *sf_observe_context = "sf_observe_context";
     }];
     
     if (self.delayCallDisplayHChangeWhenAnimation) {
-        void (^orgbk)(void) = [CATransaction.completionBlock copy];
-        [CATransaction setCompletionBlock:^{
-            if (orgbk) {
-                orgbk();
-            }
+        [[NSOperationQueue mainQueue] addOperationWithBlock:^{
             CGFloat newdh = CGRectGetHeight(self.bounds) - (CGRectGetMinY(self.embedView.frame) - self.contentOffset.y);
             if (self.needsAnimationWhenDelayCall) {
                 [UIView animateWithDuration:dur
@@ -1821,7 +1806,6 @@ static void *sf_observe_context = "sf_observe_context";
             //进入了内部滑动范围
             CGFloat cursclength = 0;
             BOOL findtheinfo = NO;
-            CGFloat findoffsety = 0;
             for (NSInteger infoidx = 0; infoidx < _innerSVAttInfCount; infoidx++) {
                 BODragScrollAttachInfo innerscinfo = _innerSVAttInfAr[infoidx];
                 CGFloat infomaxsc = innerscinfo.innerOffsetB - innerscinfo.innerOffsetA;
@@ -1852,9 +1836,7 @@ static void *sf_observe_context = "sf_observe_context";
                         isinnersc = (exty > 0);
                     }
                     embedf.origin.y = cursclength;
-                    
                     findtheinfo = YES;
-                    findoffsety = innerscinfo.dragSVOffsetY;
                     
                     break;
                 }
