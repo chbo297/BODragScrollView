@@ -303,6 +303,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
     
     __weak UIControl *_theCtrWhenDecInner; //decelerating时点击了某UIControl，为了不使scrollView的系统机制无效其点击事件，手动传递action
     BOOL _lastScrollIsInner; //最后一次滑动位置变化（包括内外），是否是捕获的内部sv
+    NSValue *_scrollBeganLoc; //滑动开始的点
     BODragScrollTapGes *_dsTapGes;
     
     //触发内部scrollView时会切换到内部scrollView的rate，用该处存储自己的的rate
@@ -361,6 +362,9 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         super.showsVerticalScrollIndicator = NO;
         super.delaysContentTouches = NO;
         super.canCancelContentTouches = YES;
+        if (@available(iOS 13.0, *)) {
+            super.automaticallyAdjustsScrollIndicatorInsets = NO;
+        }
         
         _dsTapGes = [[BODragScrollTapGes alloc] initWithTarget:self action:@selector(onTapGes:)];
         if (@available(iOS 11.0, *)) {
@@ -1758,7 +1762,8 @@ static void *sf_observe_context = "sf_observe_context";
     CGFloat innertotalsc = _totalScrollInnerOSy;
     UIEdgeInsets cinset = UIEdgeInsetsZero;
     BOOL triggerinner = NO;
-    BOOL isbounces = NO;
+    //暂时不用这个属性，后续有需求可能会用
+    __unused BOOL isbounces = NO;
     
     if (_innerSVAttInfCount > 0) {
         CGFloat innershouldosy = _currentScrollView.contentOffset.y;
@@ -1951,8 +1956,8 @@ static void *sf_observe_context = "sf_observe_context";
             super.decelerationRate = _curDecelerationRate;
         }
     }
-    //更新面板展示高度
     
+    //更新面板展示高度
     if (!self.isScrollAnimating || !self.delayCallDisplayHChangeWhenAnimation) {
         self.currDisplayH = newdh;
     }
@@ -1965,23 +1970,31 @@ static void *sf_observe_context = "sf_observe_context";
                                         isInner:isinnersc];
     }
     
-    if (triggerinner
-        && (0 != _missAttachAndNeedsReload)) {
-        _missAttachAndNeedsReload = 0;
-        [self __setupCurrentScrollView:_currentScrollView];
-    } else if (isbounces && (0 != _missAttachAndNeedsReload)) {
-        CGFloat vely = [scrollView.panGestureRecognizer velocityInView:scrollView].y;
-        /*
-         bounces时
-         点在上面，但向下滑了，此时reset点
-         点在下面，但向上滑了，此时reset点
-         */
-        if ((_missAttachAndNeedsReload > 0 && vely > 0)
-            || (_missAttachAndNeedsReload < 0 && vely < 0)) {
+    if (0 != _missAttachAndNeedsReload
+        && _currentScrollView) {
+        if (triggerinner) {
+            //到达内部点，重置位置
             _missAttachAndNeedsReload = 0;
-            _forceResetInnerScrollOffsetY = YES;
             [self __setupCurrentScrollView:_currentScrollView];
-            _forceResetInnerScrollOffsetY = NO;
+        } else if (nil != _scrollBeganLoc) {
+            CGFloat beganlocy = _scrollBeganLoc.CGPointValue.y;
+            CGFloat curry = [scrollView.panGestureRecognizer locationInView:scrollView.window].y;
+            
+            /*
+             非内部点，根据手指方向，决定是继续滑动还是重置内部
+             点在上面，但向下滑了，此时reset点
+             点在下面，但向上滑了，此时reset点
+             */
+            CGFloat onepxiel = sf_getOnePxiel();
+            if ((_missAttachAndNeedsReload > 0
+                 && (curry > (beganlocy + onepxiel)))
+                || (_missAttachAndNeedsReload < 0
+                    && ((curry + onepxiel) < beganlocy))) {
+                _missAttachAndNeedsReload = 0;
+                _forceResetInnerScrollOffsetY = YES;
+                [self __setupCurrentScrollView:_currentScrollView];
+                _forceResetInnerScrollOffsetY = NO;
+            }
         }
     }
 }
@@ -2557,6 +2570,8 @@ static void *sf_observe_context = "sf_observe_context";
         }
         _theCtrWhenDecInner = nil;
     }
+    
+    _scrollBeganLoc = nil;
 }
 
 - (void)scrollViewDidEndDecelerating:(UIScrollView *)scrollView {
@@ -2593,6 +2608,8 @@ static void *sf_observe_context = "sf_observe_context";
 }
 
 - (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView {
+    _scrollBeganLoc = @([scrollView.panGestureRecognizer locationInView:scrollView.window]);
+    
     if (_needsFixDisplayHWhenTouchEnd) {
         //开始响应手势滑动了，自会在滑动结束后重置位置，不需要_dsTapGes的抬起修正了
         _needsFixDisplayHWhenTouchEnd = NO;
