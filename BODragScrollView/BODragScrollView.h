@@ -18,7 +18,7 @@ typedef NS_ENUM(NSUInteger, BODragScrollDecelerateStyle) {
 };
 
 /*
- //辅助方法，在ar数组中寻找value距离哪一个index的值最近
+ 辅助方法，在ar数组中寻找value距离哪一个index的值最近
  
  @nearby 是否先按距离寻找最近的点
  @ceil
@@ -29,11 +29,6 @@ FOUNDATION_EXTERN NSInteger bo_findIdxInFloatArrayByValue(NSArray<NSNumber *> *a
                                                           CGFloat value,
                                                           BOOL nearby,
                                                           BOOL ceil);
-
-//有些需要动态加载的页面可设置scrollView的tag标记为需要被衔接手势
-//按下时，一些scrollView在还没有加载到内容不能滑动，手势过程中scrollView加载到内容后，无法及时捕获。
-//为此类scrollview设置tag为bodragcard_forward_observer_scrollview_tag_p的倍数，BODragScrollView会主动监听该scrolviews
-#define bo_dragcard_forward_observer_scrollview_tag_r (777)
 
 @class BODragScrollView;
 
@@ -154,20 +149,21 @@ FOUNDATION_EXTERN NSInteger bo_findIdxInFloatArrayByValue(NSArray<NSNumber *> *a
 
 /*
  innerSVBehavior中会存放内部默认的行为策略信息，外部可以修改该策略
+ 注：传出来的该innerSVBehavior容器内的所有Array和Dictionary都是可变类型，可以直接修改其catchSV、priority的值
  
  @{
- //被捕获的scrollView，可以修改，只能修改为otherSVBehaviorAr中的的scrollView
+ // 被捕获的scrollView，可以修改，只能修改为otherSVBehaviorAr中的的scrollView
  @"catchSV": UIScrollView,
  
- //存放本次手势时，响应链上的其它未被捕获的scrollView，其中的priority用来控制随后的交互行为
+ // 存放本次手势时，响应链上的其它未被捕获的scrollView，其中的priority用来控制随后的交互行为
  @"otherSVBehaviorAr": @[
  @{
  @"sv": UIScrollView,
  
- //0：该ScrollView的交互和滑动效果将与DragScrollView共存
- //-1: 该ScrollView的交互与DragScrollView不共存，若冲突则取消该ScrollView的交互响应
- //1: 该ScrollView的交互与DragScrollView不共存，若冲突则取消该DragScrollView的交互响应
- //2：该ScrollView的交互与DragScrollView不共存, 但冲突时不做强制处理，交给系统默认行为(内部的横滑scrollView默认使用该优先级，用来保障横滑和竖滑不共存，并视滑动方向自动选择哪个有效)
+ // 0：该ScrollView的交互和滑动效果将与DragScrollView共存
+ // -1: 该ScrollView的交互与DragScrollView不共存，若冲突则取消该ScrollView的交互响应
+ // 1: 该ScrollView的交互与DragScrollView不共存，若冲突则取消该DragScrollView的交互响应
+ // 2：该ScrollView的交互与DragScrollView不共存, 但冲突时不做强制处理，交给系统默认行为(内部的横滑scrollView默认使用该优先级，用来保障横滑和竖滑不共存，并视滑动方向自动选择哪个有效)
  @"priority": @(-1/0/1/2)
  }
  ]

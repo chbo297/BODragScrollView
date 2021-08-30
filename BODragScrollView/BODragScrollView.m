@@ -444,7 +444,6 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
     }
     
     //优先级：可滑动的ScrollView > tag标记的 > 智能判断高度最高的，都没有传nil; force=YES，相同时也刷新being和end点
-    UIScrollView *forwardsc = nil; //被tag标记 可能需要加载的scrollView
     UIScrollView *maxhsc = nil; //高度最大的scrollView
     UIScrollView *thsc = nil;   //寻找第一个可滑动的scrollView
     UIResponder *resp = view;
@@ -469,6 +468,12 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                     [scdic setObject:scv forKey:@"sv"];
                 }
                 
+                /*
+                 0：该ScrollView的交互和滑动效果将与DragScrollView共存
+                 -1: 该ScrollView的交互与DragScrollView不共存，若冲突则取消该ScrollView的交互响应
+                 1: 该ScrollView的交互与DragScrollView不共存，若冲突则取消该DragScrollView的交互响应
+                 2：该ScrollView的交互与DragScrollView不共存, 但冲突时不做强制处理，交给系统默认行为(内部的横滑scrollView默认使用该优先级，用来保障横滑和竖滑不共存，并视滑动方向自动选择哪个有效)
+                 */
                 NSInteger priority = 0;
                 
                 UIEdgeInsets inset = sf_common_contentInset(scv);
@@ -481,25 +486,18 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                         break;
                     }
                 } else {
-                    if (!forwardsc &&
-                        scv.tag > 0 &&
-                        (0 == (scv.tag % bo_dragcard_forward_observer_scrollview_tag_r))) {
-                        //记录暂不能滑动，但是tag符合forward_observer的scrollview
-                        forwardsc = scv;
-                    } else {
-                        if (scv.contentSize.width + inset.left + inset.right <= CGRectGetWidth(scv.bounds)) {
-                            //非横向滑动scrollView默认找最高的
-                            if (!maxhsc) {
-                                maxhsc = scv;
-                            } else {
-                                if (CGRectGetHeight(scv.frame) > CGRectGetHeight(maxhsc.frame)) {
-                                    maxhsc = scv;
-                                }
-                            }
+                    if (scv.contentSize.width + inset.left + inset.right <= CGRectGetWidth(scv.bounds)) {
+                        //非横向滑动scrollView默认找最高的
+                        if (!maxhsc) {
+                            maxhsc = scv;
                         } else {
-                            //横滑scv，不共存，不指定优先级，走系统默认行为
-                            priority = 2;
+                            if (CGRectGetHeight(scv.frame) > CGRectGetHeight(maxhsc.frame)) {
+                                maxhsc = scv;
+                            }
                         }
+                    } else {
+                        //横滑scv，不共存，不指定优先级，走系统默认行为
+                        priority = 2;
                     }
                 }
                 
@@ -513,7 +511,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         resp = resp.nextResponder;
     }
     
-    UIScrollView *selsc = (thsc ? : (forwardsc ? : maxhsc));
+    UIScrollView *selsc = (thsc ? : maxhsc);
     
     if (svBehaviorDic && svbehar.count > 1) {
         __block NSMutableDictionary *catchscdic;
