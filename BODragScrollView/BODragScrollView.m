@@ -620,39 +620,58 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
  为了解决上述中webView被多余响应一起其它惯性点击的响应问题，在hitTest中进行相应处理
  */
 - (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
-    UIView *htv = [super hitTest:point withEvent:event];
-    if (event &&
-        (self.isScrollAnimating || self.bods_isDecelerating) &&
-        htv) {
-        //惯性和动画滑动时
-        if (_currentScrollView && _lastScrollIsInner) {
-            //若滑动的捕获sc内部
-            if ([self __findViewHierarchy:htv] > 2) {
-                //点击内部需不响应其内部内容
-                return _currentScrollView;
+    if (!self.hidden
+        && self.userInteractionEnabled
+        && self.alpha > 0.01
+        && self.embedView) {
+        //兼容动画变化
+        CALayer *emlayer = self.embedView.layer.presentationLayer ? : self.embedView.layer;
+        CALayer *sflayer = self.layer;
+        CGPoint innerpt = [sflayer convertPoint:point toLayer:emlayer];
+        BOOL piev = [self.embedView pointInside:innerpt withEvent:event];
+        if (piev) {
+            UIView *htv = [self.embedView hitTest:innerpt withEvent:event];
+            /*
+             以下逻辑是为了防止多层scrollView嵌套时，或者内部嵌套webView时，惯性过程点击本应只是停止滑动，但触发了内部的响应
+             这里监测到isScrollAnimating、isDecelerating时只响应scrollView，不响应内部其他view
+             */
+            if (event
+                && (self.isScrollAnimating || self.bods_isDecelerating)
+                && htv) {
+                //惯性和动画滑动时
+                if (_currentScrollView && _lastScrollIsInner) {
+                    //若滑动的捕获sc内部
+                    if ([self __findViewHierarchy:htv] > 2) {
+                        //点击内部需不响应其内部内容
+                        return _currentScrollView;
+                    } else {
+                        //点击非捕获sc内，正常响应即可
+                        return htv;
+                    }
+                } else {
+                    //若滑动的自身，不响应惯性或动画中非scrollView的子内容，只停止本身的滑动
+                    return [self __seekTargetScrollViewFrom:htv svBehaviorDic:nil] ? : self;
+                }
             } else {
-                //点击非捕获sc内，正常响应即可
-                return htv;
-            }
-        } else {
-            //若滑动的自身，不响应惯性或动画中非scrollView的子内容，只停止本身的滑动
-            return [self __seekTargetScrollViewFrom:htv svBehaviorDic:nil] ? : self;
-        }
-    } else {
-        //如果层级中有scrollView处于惯性过程，直接响应到该scrollView不响应内部
-        for (UIResponder *theview = htv;
-             self != theview && nil != theview;
-             theview = theview.nextResponder) {
-            if ([theview isKindOfClass:[UIScrollView class]]) {
-                UIScrollView *thescrollv = (id)theview;
-                if (thescrollv.isDecelerating) {
-                    return thescrollv;
+                //如果层级中有scrollView处于惯性过程，直接响应到该scrollView不响应内部
+                for (UIResponder *theview = htv;
+                     self != theview && nil != theview;
+                     theview = theview.nextResponder) {
+                    if ([theview isKindOfClass:[UIScrollView class]]) {
+                        UIScrollView *thescrollv = (id)theview;
+                        if (thescrollv.isDecelerating) {
+                            return thescrollv;
+                        }
+                    }
                 }
             }
+            return htv;
+        } else {
+            return nil;
         }
+    } else {
+        return nil;
     }
-    
-    return htv;
 }
 
 - (void)layoutSubviews {
@@ -673,7 +692,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                 CGFloat needsath = ws.needsAnimatedToH.floatValue;
                 ws.needsAnimatedToH = nil;
                 if (!sf_uifloat_equal(needsath, ws.currDisplayH)) {
-                    [ws scrollToDisplayH:needsath animated:YES];
+                    [ws scrollToDisplayH:needsath animated:YES completion:nil];
                 }
             }];
         }
@@ -825,6 +844,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         }
         _totalScrollInnerOSy = 0;
         _lastInnerSCSize = CGSizeZero;
+        _lastSetInnerOSy = CGPointZero;
         _missAttachAndNeedsReload = 0;
     }
     
@@ -1507,6 +1527,16 @@ static void *sf_observe_context = "sf_observe_context";
 - (CGFloat)scrollToDisplayH:(CGFloat)displayH
                    animated:(BOOL)animated
                  completion:(void (^ __nullable)(void))completion {
+    return [self scrollToDisplayH:displayH
+                         animated:animated
+                          subInfo:nil
+                       completion:completion];
+}
+
+- (CGFloat)scrollToDisplayH:(CGFloat)displayH
+                   animated:(BOOL)animated
+                    subInfo:(NSDictionary *)subInfo
+                 completion:(void (^ __nullable)(void))completion {
     
     if (_currentScrollView) {
         NSValue *offsetval = [self __checkInnerOSForDH:displayH];
@@ -1519,6 +1549,9 @@ static void *sf_observe_context = "sf_observe_context";
             [self __setupCurrentScrollView:nil];
         }
     }
+    
+    //清空待执行动画
+    _needsAnimatedToH = nil;
     
     CGFloat validdisplayH = 0;
     
@@ -1537,8 +1570,6 @@ static void *sf_observe_context = "sf_observe_context";
                 //添加待播动画
                 _needsAnimatedToH = @(displayH);
             } else {
-                //清空待播动画
-                _needsAnimatedToH = nil;
                 //还没有进行首次布局，赋值标记位，到开始布局的时候应用该高度
                 _needsDisplayH = @(displayH);
             }
@@ -1561,15 +1592,27 @@ static void *sf_observe_context = "sf_observe_context";
             
             void (^doblock)(void) = ^{
                 if (animated) {
-                    BODragScrollDecelerateStyle anisel = self.defaultDecelerateStyle;
-                    if (self.dragScrollDelegate && [self.dragScrollDelegate respondsToSelector:@selector(dragScrollViewDecelerate:fromH:toH:reason:)]) {
-                        anisel = [self.dragScrollDelegate dragScrollViewDecelerate:self
-                                                                             fromH:self.currDisplayH
-                                                                               toH:displayH
-                                                                            reason:reason];
+                    BOOL forceCAAnimation = NO;
+                    if (subInfo) {
+                        NSNumber *forceCAAnimationnum = [subInfo objectForKey:@"forceCAAnimation"];
+                        if (nil != forceCAAnimationnum) {
+                            forceCAAnimation = forceCAAnimationnum.boolValue;
+                        }
                     }
-                    if (BODragScrollDecelerateStyleDefault == anisel) {
-                        anisel = self.defaultDecelerateStyle;
+                    
+                    BODragScrollDecelerateStyle anisel = self.defaultDecelerateStyle;
+                    if (forceCAAnimation) {
+                        anisel = BODragScrollDecelerateStyleCAAnimation;
+                    } else {
+                        if (self.dragScrollDelegate && [self.dragScrollDelegate respondsToSelector:@selector(dragScrollViewDecelerate:fromH:toH:reason:)]) {
+                            anisel = [self.dragScrollDelegate dragScrollViewDecelerate:self
+                                                                                 fromH:self.currDisplayH
+                                                                                   toH:displayH
+                                                                                reason:reason];
+                        }
+                        if (BODragScrollDecelerateStyleDefault == anisel) {
+                            anisel = self.defaultDecelerateStyle;
+                        }
                     }
                     
                     if (BODragScrollDecelerateStyleNature == anisel) {
@@ -1581,7 +1624,12 @@ static void *sf_observe_context = "sf_observe_context";
                         };
                         [self setContentOffset:os animated:YES];
                     } else {
-                        [self __liteAnimateToOffset:os vel:0 completion:^(BOOL isFinish) {
+                        CGFloat vel = 0;
+                        NSNumber *velnum = [subInfo objectForKey:@"vel"];
+                        if (nil != velnum) {
+                            vel = velnum.boolValue;
+                        }
+                        [self __liteAnimateToOffset:os vel:vel completion:^(BOOL isFinish) {
                             if (completion) {
                                 completion();
                             }
@@ -1840,10 +1888,8 @@ static void *sf_observe_context = "sf_observe_context";
                     }
                     embedf.origin.y = cursclength;
                     findtheinfo = YES;
-                    
                     break;
                 }
-                
             }
             
             if (findtheinfo) {
@@ -2078,7 +2124,7 @@ static void *sf_observe_context = "sf_observe_context";
                       dragOffsetY:(CGFloat)offsetY
                          accuracy:(CGFloat)accuracy
                               loc:(NSInteger *)loc {
-    for (NSInteger idx = 0 ; idx < count; idx++) {
+    for (NSInteger idx = 0; idx < count; idx++) {
         BODragScrollAttachInfo info = attinfoAr[idx];
         if (offsetY < info.dragSVOffsetY - accuracy) {
             if (idx - 1 >= 0) {
@@ -2679,24 +2725,6 @@ static void *sf_observe_context = "sf_observe_context";
     }
 }
 
-- (void)fixDisplayHAfterChangeWithAPI {
-    BODragScrollAttachInfo theinfo =\
-    (BODragScrollAttachInfo){0, 0, NO, 0, 0, 0};
-    CGPoint of = self.contentOffset;
-    CGPoint inof = of;
-    __unused NSInteger scrolltype =\
-    [self __scrollViewWillEndDragging:self
-                         withVelocity:CGPointZero
-                  targetContentOffset:&inof
-                           attachInfo:&theinfo];
-    if (sf_uifloat_equal(inof.y, of.y)) {
-        return;
-    } else {
-        [self scrollToDisplayH:theinfo.displayH animated:YES];
-    }
-    
-}
-
 #pragma mark - gesture
 
 //不实现该方法，默认NO即可
@@ -2898,7 +2926,10 @@ shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)otherGestureRec
                         }
                     } else {
                         if (_currentScrollView && hier >= 2) {
-                            //与内部scrollview内的手势不共存
+                            /*
+                             需要不共存，防止web内部两个scrollview同时滑动
+                             有个case：web内又弹了一个可scroll的弹窗，共存会使上下两层都同时滚动
+                             */
                             return NO;
                         } else {
                             return YES;
@@ -2934,8 +2965,20 @@ shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)otherGestureRec
     if (_needsFixDisplayHWhenTouchEnd &&
         UIGestureRecognizerStateEnded == tapGes.state &&
         !self.isDecelerating) {
+        
         //若本次点击导致了动画停止，点击结束后，没有触发scroll的惯性，则需要手动进行一次吸附行为，防止停留位置不对
-        [self fixDisplayHAfterChangeWithAPI];
+        BODragScrollAttachInfo theinfo =\
+        (BODragScrollAttachInfo){0, 0, NO, 0, 0, 0};
+        CGPoint of = self.contentOffset;
+        CGPoint inof = of;
+        __unused NSInteger scrolltype =\
+        [self __scrollViewWillEndDragging:self
+                             withVelocity:CGPointZero
+                      targetContentOffset:&inof
+                               attachInfo:&theinfo];
+        if (!sf_uifloat_equal(inof.y, of.y)) {
+            [self scrollToDisplayH:theinfo.displayH animated:YES];
+        }
     }
 }
 

@@ -127,9 +127,9 @@ FOUNDATION_EXTERN NSInteger bo_findIdxInFloatArrayByValue(NSArray<NSNumber *> *a
  没有实现该方法时，读取defaultDecelerateStyle
  */
 - (BODragScrollDecelerateStyle)dragScrollViewDecelerate:(BODragScrollView *)dragScrollView
-                                                  fromH:(CGFloat)fromH
-                                                    toH:(CGFloat)toH
-                                                 reason:(NSString *)reason;
+                                                    fromH:(CGFloat)fromH
+                                                      toH:(CGFloat)toH
+                                                   reason:(NSString *)reason;
 
 /*
  当本ScrollView遇到与其它View(非所捕获的scrollView，捕获时当然是本scrollView优先)的手势冲突时，
@@ -263,6 +263,12 @@ FOUNDATION_EXTERN NSInteger bo_findIdxInFloatArrayByValue(NSArray<NSNumber *> *a
 @property (nonatomic, readonly, nullable) NSNumber *willLayoutToDisplayH;
 
 /*
+ 当未进行布局时，若调用scrollToDisplayH:animated:YES方法，currDisplayH并不会立即改变，因为还没有布局和展示
+ 此时会将needsAnimatedToH置为即将要执行的动画到达的高度，布局后开启动画
+ */
+@property (nonatomic, readonly, nullable) NSNumber *needsAnimatedToH;
+
+/*
  滑动到指定位置（展示高度）
  return:
  执行方法后，即将或已经到达的displayH
@@ -279,6 +285,11 @@ FOUNDATION_EXTERN NSInteger bo_findIdxInFloatArrayByValue(NSArray<NSNumber *> *a
 
 - (CGFloat)scrollToDisplayH:(CGFloat)displayH
                    animated:(BOOL)animated
+                 completion:(void (^ __nullable)(void))completion;
+
+- (CGFloat)scrollToDisplayH:(CGFloat)displayH
+                   animated:(BOOL)animated
+                    subInfo:(nullable NSDictionary *)subInfo
                  completion:(void (^ __nullable)(void))completion;
 
 //设置子视图吸附点（停留位置），每个数字标识内嵌View展示的高度（要求传入的每个数值大于0且从小到大排列）
