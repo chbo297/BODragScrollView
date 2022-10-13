@@ -1,9 +1,9 @@
 Pod::Spec.new do |s|
   s.name         = "BODragScrollView"
-  s.version      = "1.0.0"
-  s.summary      = "Scroll Card Interaction"
+  s.version      = "1.0.2"
+  s.summary      = "ScrollView nested in dragable card view interaction"
 
-  s.description  = "Scroll Card Interaction"
+  s.description  = "ScrollView nested in dragable card view interaction"
 
   s.homepage     = "https://github.com/chbo297/BODragScrollView"
   s.license      = { :type => "MIT", :file => "LICENSE" }
