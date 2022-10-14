@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name         = "BODragScrollView"
-  s.version      = "1.0.2"
+  s.version      = "1.0.4"
   s.summary      = "ScrollView nested in dragable card view interaction"
 
   s.description  = "ScrollView nested in dragable card view interaction"

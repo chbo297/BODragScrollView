@@ -758,7 +758,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
             self.contentInset = inset;
             self.contentOffset = CGPointMake(0, -(selfh - displayh));
             self.contentSize = CGSizeMake(sfw, cardsize.height);
-            self.embedView.frame = embedrect;
+            [self setEmbedViewFrame:embedrect];
         }];
         
         [self forceReloadCurrInnerScrollView];
@@ -771,6 +771,24 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
 }
 
 #pragma mark - 设置内部scrollview
+
+- (void)setEmbedViewFrame:(CGRect)evFrame {
+    if (!CGRectEqualToRect(self.embedView.frame, evFrame)) {
+        self.embedView.frame = evFrame;
+    }
+}
+
+- (void)setCurrentSVContentOffset:(CGPoint)offset {
+    if (!_currentScrollView) {
+        return;
+    }
+    if (!CGPointEqualToPoint(_currentScrollView.contentOffset, offset)) {
+        _currentScrollView.contentOffset = offset;
+        _lastSetInnerOSy = offset;
+    }
+}
+
+
 - (void)setCurrentScrollView:(UIScrollView *)currentScrollView force:(BOOL)force {
     if (force) {
         [self __setupCurrentScrollView:currentScrollView];
@@ -855,6 +873,9 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
     embedf.origin.y = 0;
     sfoffset.y = -embedcurrts;
     
+    BOOL needssetinneroffset = NO;
+    CGPoint spinneroffset = CGPointZero;
+    
     if (nil != currentScrollView) {
         /*
          添加内部ScrollView
@@ -908,8 +929,16 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                         + _currentScrollView.contentSize.height
                         + cinset.bottom
                         - CGRectGetHeight(_currentScrollView.bounds));
-        
-        BOOL caninnerscroll = (innertotalsc > 0);
+        BOOL caninnerscroll;
+        if (innertotalsc > 0) {
+            //有可滑动区域
+            caninnerscroll = YES;
+        } else {
+            //没有可正常滑动
+            innertotalsc = 0;
+            //根据是否可bounces判断内部是否可滑（进行bounces）
+            caninnerscroll = (_currentScrollView.bounces && _currentScrollView.alwaysBounceVertical);
+        }
         
         if (caninnerscroll) {
             //内部可滑动
@@ -1121,13 +1150,13 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
             if (!innerinfocomplete) {
                 CGFloat dyembedtosc =\
                 [_embedView convertRect:_currentScrollView.frame fromView:_currentScrollView.superview].origin.y;
-                CGFloat scmints = embedmints + dyembedtosc;
                 CGFloat curscts = embedcurrts + dyembedtosc;
                 CGFloat scheight = CGRectGetHeight(_currentScrollView.frame);
                 //开始滑动内部时，内部scrollView.top距离DragScrollView可展示局域顶部的距离
                 CGFloat scinnerts = curscts;
                 
 #if DEBUG
+                CGFloat scmints = embedmints + dyembedtosc;
                 //内部bounces时，外部位置需要在最上/下（之上的逻辑需要处理完这种情况）
                 if (innercursc < 0) {
                     CGFloat scmaxts = embedmaxts + dyembedtosc;
@@ -1297,13 +1326,8 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                 _missAttachAndNeedsReload = innerscmayinother;
             }
             
-            [self innerSetting:^{
-                if (0 == self->_missAttachAndNeedsReload) {
-                    self->_currentScrollView.contentOffset = inneroffset;
-                    self->_lastSetInnerOSy = inneroffset;
-                }
-            }];
-            
+            needssetinneroffset = YES;
+            spinneroffset = inneroffset;
         }
         
         if (!innerinfoarhascompmem) {
@@ -1316,8 +1340,13 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
     
     [self innerSetting:^{
         self.contentSize = contentsize;
-        self->_embedView.frame = embedf;
+        [self setEmbedViewFrame:embedf];
         self.contentOffset = sfoffset;
+        
+        if (needssetinneroffset
+            && 0 == self->_missAttachAndNeedsReload) {
+            [self setCurrentSVContentOffset:spinneroffset];
+        }
     }];
 }
 
@@ -1942,11 +1971,11 @@ static void *sf_observe_context = "sf_observe_context";
         CGPoint inneroffset = _currentScrollView.contentOffset;
         inneroffset.y = innershouldosy;
         [self innerSetting:^{
+            //要先设EmbedViewFrame再setCurrentSVContentOffset，否则setCurrentSVContentOffset可能引起系统的重新布局矫正CurrentSV的ContentOffset
+            [self setEmbedViewFrame:embedf];
             if (0 == self->_missAttachAndNeedsReload) {
-                self->_currentScrollView.contentOffset = inneroffset;
-                self->_lastSetInnerOSy = inneroffset;
+                [self setCurrentSVContentOffset:inneroffset];
             }
-            self->_embedView.frame = embedf;
         }];
     } else {
         CGFloat coy = self.contentOffset.y;
@@ -1958,18 +1987,18 @@ static void *sf_observe_context = "sf_observe_context";
             isbounces = YES;
             embedf.origin.y = coy - maxosy;
             [self innerSetting:^{
-                self->_embedView.frame = embedf;
+                [self setEmbedViewFrame:embedf];
             }];
         } else if (coy < minosy && !self.allowBouncesCardTop) {
             isbounces = YES;
             embedf.origin.y = coy - minosy;
             [self innerSetting:^{
-                self->_embedView.frame = embedf;
+                [self setEmbedViewFrame:embedf];
             }];
         } else if (embedf.origin.y != 0) {
             embedf.origin.y = 0;
             [self innerSetting:^{
-                self->_embedView.frame = embedf;
+                [self setEmbedViewFrame:embedf];
             }];
         }
     }
