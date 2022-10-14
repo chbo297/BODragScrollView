@@ -774,7 +774,20 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
 
 - (void)setEmbedViewFrame:(CGRect)evFrame {
     if (!CGRectEqualToRect(self.embedView.frame, evFrame)) {
-        self.embedView.frame = evFrame;
+        CGSize embsz = self.embedView.bounds.size;
+        if (!CGSizeEqualToSize(embsz, evFrame.size)) {
+            //size不同就直接设置
+            self.embedView.frame = evFrame;
+        } else {
+            //size相同时，只改center即可，防止设frame时触发其内部布局，比如embedView是个scrollView时，重设frame系统会更新其内部offset
+            //重设center的位置变化有时也会触发系统会更新其内部但触发的几率比改size少
+            CGPoint ocenter = self.embedView.center;
+            CGPoint ncenter = CGPointMake(evFrame.origin.x + (embsz.width * self.embedView.layer.anchorPoint.x),
+                                          evFrame.origin.y + (embsz.height * self.embedView.layer.anchorPoint.y));
+            if (!CGPointEqualToPoint(ocenter, ncenter)) {
+                self.embedView.center = ncenter;
+            }
+        }
     }
 }
 
