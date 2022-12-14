@@ -550,6 +550,11 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         [_theCtrWhenDecInner sendActionsForControlEvents:UIControlEventTouchDown];
     }
     
+    [self trySetupCurrentScrollViewWithContentView:view];
+    return [super touchesShouldBegin:touches withEvent:event inContentView:view];
+}
+
+- (void)trySetupCurrentScrollViewWithContentView:(UIView *)view {
     _innerSVBehaviorInfo = nil;
     NSMutableDictionary *svbehaviordic = @{}.mutableCopy;
     UIScrollView *selscv = [self __seekTargetScrollViewFrom:view svBehaviorDic:svbehaviordic];
@@ -564,7 +569,6 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
     }
     
     [self __setupCurrentScrollView:selscv];
-    return [super touchesShouldBegin:touches withEvent:event inContentView:view];
 }
 
 /*
@@ -2519,6 +2523,85 @@ static void *sf_observe_context = "sf_observe_context";
     *targetContentOffset = targetos;
     
     return scrolltype;
+}
+
+- (BOOL)accessibilityScroll:(UIAccessibilityScrollDirection)direction {
+    if (!self.embedView) {
+        return NO;
+    }
+    
+    NSNumber *dacontrol = nil;
+    if (self.dragScrollDelegate
+        && [self.dragScrollDelegate respondsToSelector:@selector(dragScrollView:accessibilityScroll:)]) {
+        dacontrol = [self.dragScrollDelegate dragScrollView:self
+                                        accessibilityScroll:direction];
+    }
+    
+    if (nil != dacontrol && dacontrol.boolValue) {
+        //业务已接管
+        return YES;
+    }
+    
+    if (UIAccessibilityScrollDirectionDown == direction) {
+        if (self.attachDisplayHAr.count > 0) {
+            NSInteger toidx = bo_findIdxInFloatArrayByValue(self.attachDisplayHAr,
+                                                            self.currDisplayH + 1, NO, YES);
+            if (toidx < self.attachDisplayHAr.count) {
+                CGFloat toh = self.attachDisplayHAr[toidx].floatValue;
+                if (toh != self.currDisplayH) {
+                    [self scrollToDisplayH:toh animated:YES];
+                    return YES;
+                }
+            }
+        } else {
+            if (!_currentScrollView) {
+                UIEdgeInsets cinset = sf_common_contentInset(self);
+                [self setContentOffset:CGPointMake(0, cinset.bottom + self.contentSize.height - self.bounds.size.height)
+                              animated:YES];
+            }
+        }
+        
+    } else if (UIAccessibilityScrollDirectionUp == direction) {
+        if (self.attachDisplayHAr.count > 0) {
+            if (self.currDisplayH == self.attachDisplayHAr.lastObject.floatValue) {
+                //若代理未显示告知_currentScrollView不处理，对_currentScrollView进行只能判定
+                if (nil == dacontrol) {
+                    if (!_currentScrollView) {
+                        UIView *targetview =\
+                        [self hitTest:CGPointMake(CGRectGetMidX(self.bounds),
+                                                  CGRectGetMidY(self.bounds))
+                            withEvent:nil];
+                        [self trySetupCurrentScrollViewWithContentView:targetview];
+                    }
+                    
+                    if (_currentScrollView) {
+                        UIEdgeInsets cinset = sf_common_contentInset(_currentScrollView);
+                        if (_currentScrollView.contentOffset.y > -cinset.top) {
+                            return NO;
+                        }
+                    }
+                }
+            }
+            
+            NSInteger toidx = bo_findIdxInFloatArrayByValue(self.attachDisplayHAr,
+                                                            self.currDisplayH - 1, NO, NO);
+            if (toidx < self.attachDisplayHAr.count) {
+                CGFloat toh = self.attachDisplayHAr[toidx].floatValue;
+                if (toh != self.currDisplayH) {
+                    [self scrollToDisplayH:toh animated:YES];
+                    return YES;
+                }
+            }
+        } else {
+            if (!_currentScrollView) {
+                UIEdgeInsets cinset = sf_common_contentInset(self);
+                [self setContentOffset:CGPointMake(0, -cinset.top)
+                              animated:YES];
+            }
+        }
+    }
+    
+    return NO;
 }
 
 - (void)scrollViewWillEndDragging:(UIScrollView *)scrollView

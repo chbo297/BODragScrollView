@@ -176,6 +176,15 @@ FOUNDATION_EXTERN NSInteger bo_findIdxInFloatArrayByValue(NSArray<NSNumber *> *a
 - (BOOL)dragScrollView:(BODragScrollView *)dragScrollView
    shouldMisAttachForH:(CGFloat)displayH;
 
+/*
+ 视障、旁白的处理方法
+ return：
+ nil 业务不处理，由控件默认行为处理（根据方向由小到大、由大到小，并只能判定内里是否有scrollview进行滑动）
+ YES 业务已处理，控件无需再处理
+ NO  业务未处理，控件继续默认行为(不再尝试对内里的scrollview进行处理)
+ */
+- (NSNumber *)dragScrollView:(BODragScrollView *)dragScrollView accessibilityScroll:(UIAccessibilityScrollDirection)direction;
+
 @end
 
 
