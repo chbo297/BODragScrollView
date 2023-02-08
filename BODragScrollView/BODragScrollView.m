@@ -915,33 +915,6 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         //当前内部一共滑了多远
         CGFloat innercursc = oriinnerosy + cinset.top;
         
-        NSArray<NSDictionary *> *scinnerinfoar = nil;
-        if (self.dragScrollDelegate && [self.dragScrollDelegate respondsToSelector:@selector(dragScrollView:scrollBehaviorForInnerSV:)]) {
-            scinnerinfoar = [self.dragScrollDelegate dragScrollView:self scrollBehaviorForInnerSV:_currentScrollView];
-        }
-        
-        if (!scinnerinfoar) {
-            if (nil != self.prefDragInnerScrollDisplayH) {
-                scinnerinfoar = @[
-                    @{
-                        @"displayH": self.prefDragInnerScrollDisplayH,
-                        @"beginOffsetY": @(-cinset.top),
-                        @"endOffsetY": @(_currentScrollView.contentSize.height + cinset.bottom - CGRectGetHeight(_currentScrollView.bounds))
-                    }
-                ];
-            }
-        }
-        
-        BODragScrollAttachInfo *innerinfoar =\
-        (BODragScrollAttachInfo *)malloc(MAX(scinnerinfoar.count, 1) * sizeof(BODragScrollAttachInfo));
-        BOOL innerinfoarhascompmem = NO;
-        NSInteger innerinfocount = 0;
-        
-        BOOL specialinnersc = NO;
-        //向下-1  向上1  没有是0
-        NSInteger innerscmayinother = 0;
-        NSInteger findwhichidx = -1;
-        
         innertotalsc = (cinset.top
                         + _currentScrollView.contentSize.height
                         + cinset.bottom
@@ -956,6 +929,36 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
             //根据是否可bounces判断内部是否可滑（进行bounces）
             caninnerscroll = (_currentScrollView.bounces && _currentScrollView.alwaysBounceVertical);
         }
+        
+        NSArray<NSDictionary *> *scinnerinfoar = nil;
+        if (self.dragScrollDelegate && [self.dragScrollDelegate respondsToSelector:@selector(dragScrollView:scrollBehaviorForInnerSV:)]) {
+            scinnerinfoar = [self.dragScrollDelegate dragScrollView:self scrollBehaviorForInnerSV:_currentScrollView];
+        }
+        
+        //可滑动，且没有获得delegate指定，若有prefDragInnerScrollDisplayH指定，则从prefDragInnerScrollDisplayH指定位置开始滑动
+        if (caninnerscroll
+            && !scinnerinfoar
+            && nil != self.prefDragInnerScrollDisplayH) {
+            CGFloat beginOffsetY = -cinset.top;
+            CGFloat endOffsetY = (innertotalsc > 0) ? (innertotalsc - beginOffsetY) : beginOffsetY;
+            scinnerinfoar = @[
+                @{
+                    @"displayH": self.prefDragInnerScrollDisplayH,
+                    @"beginOffsetY": @(beginOffsetY),
+                    @"endOffsetY": @(endOffsetY)
+                }
+            ];
+        }
+        
+        BODragScrollAttachInfo *innerinfoar =\
+        (BODragScrollAttachInfo *)malloc(MAX(scinnerinfoar.count, 1) * sizeof(BODragScrollAttachInfo));
+        BOOL innerinfoarhascompmem = NO;
+        NSInteger innerinfocount = 0;
+        
+        BOOL specialinnersc = NO;
+        //向下-1  向上1  没有是0
+        NSInteger innerscmayinother = 0;
+        NSInteger findwhichidx = -1;
         
         if (caninnerscroll) {
             //内部可滑动
