@@ -560,8 +560,8 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
     UIScrollView *selscv = [self __seekTargetScrollViewFrom:view svBehaviorDic:svbehaviordic];
     if (svbehaviordic.count > 0) {
         if (self.dragScrollDelegate
-            && [self.dragScrollDelegate respondsToSelector:@selector(dragScrollView:innerSVBehavior:)]) {
-            [self.dragScrollDelegate dragScrollView:self innerSVBehavior:svbehaviordic];
+            && [self.dragScrollDelegate respondsToSelector:@selector(dragScrollView:catchAndPriorityInfo:)]) {
+            [self.dragScrollDelegate dragScrollView:self catchAndPriorityInfo:svbehaviordic];
             selscv = [svbehaviordic objectForKey:@"catchSV"] ? : selscv;
         }
         

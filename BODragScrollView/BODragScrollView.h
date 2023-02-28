@@ -148,8 +148,8 @@ FOUNDATION_EXTERN NSInteger bo_findIdxInFloatArrayByValue(NSArray<NSNumber *> *a
        canCatchInnerSV:(UIScrollView *)sv;
 
 /*
- innerSVBehavior中会存放内部默认的行为策略信息，外部可以修改该策略
- 注：传出来的该innerSVBehavior容器内的所有Array和Dictionary都是可变类型，可以直接修改其catchSV、priority的值
+ catchAndPriorityInfo中会存放内部默认的行为策略信息，外部可以修改该策略
+ 注：传出来的该catchAndPriorityInfo容器内的所有Array和Dictionary都是可变类型，可以直接修改其catchSV、priority的值
  
  @{
  // 被捕获的scrollView，可以修改，只能修改为otherSVBehaviorAr中的的scrollView
@@ -170,7 +170,7 @@ FOUNDATION_EXTERN NSInteger bo_findIdxInFloatArrayByValue(NSArray<NSNumber *> *a
  }
  */
 - (void)dragScrollView:(BODragScrollView *)dragScrollView
-       innerSVBehavior:(NSMutableDictionary *)innerSVBehavior;
+  catchAndPriorityInfo:(NSMutableDictionary *)catchAndPriorityInfo;
 
 //对于该displayH，是否消除吸附行为
 - (BOOL)dragScrollView:(BODragScrollView *)dragScrollView
