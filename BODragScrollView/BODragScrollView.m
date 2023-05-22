@@ -362,6 +362,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         super.showsVerticalScrollIndicator = NO;
         super.delaysContentTouches = NO;
         super.canCancelContentTouches = YES;
+        super.scrollsToTop = NO;
         if (@available(iOS 13.0, *)) {
             super.automaticallyAdjustsScrollIndicatorInsets = NO;
         }
