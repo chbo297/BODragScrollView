@@ -60,6 +60,8 @@ static UIEdgeInsets sf_common_contentInset(UIScrollView * __nonnull scrollView) 
 #define sf_indictor_tag (9919)
 
 typedef struct BODragScrollAttachInfo {
+    NSInteger scrollViewIdx; //对应的scrollView索引值(一次可以捕获多个scrollView)，0表示没有，-1表示currScrollView
+    
     CGFloat displayH; //吸附点的对应展示高度
     CGFloat dragSVOffsetY; //吸附点的对应offset.y
     
@@ -435,6 +437,65 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
 }
 
 /*
+ 寻找从targetView到endView层级之间可以竖向滑动的scrollView
+ endView: 终点，不传则默认_embedView
+ includeTarget: 是否判定targetView
+ judgeInnerSVBehaviorInfo: 是否判定InnerSVBehaviorInfo信息
+ */
+- (NSMutableArray<UIScrollView *> *)__seekScrollViewMultipleNesting:(UIView *)targetView
+                                                            endView:(UIView *)endView
+                                                      includeTarget:(BOOL)includeTarget
+                                           judgeInnerSVBehaviorInfo:(BOOL)judgeInnerSVBehaviorInfo {
+    if (!endView) {
+        endView = _embedView;
+    }
+    if (!targetView
+        || !endView) {
+        return nil;
+    }
+    NSMutableArray *muar = @[].mutableCopy;
+    UIResponder *resp = includeTarget ? targetView : targetView.nextResponder;
+    while (resp) {
+        if (self == resp
+            || nil == resp) {
+            break;
+        }
+        
+        if ([resp isKindOfClass:[UIScrollView class]] && [(UIScrollView *)resp isScrollEnabled]) {
+            UIScrollView *scv = (UIScrollView *)resp;
+            UIEdgeInsets inset = sf_common_contentInset(scv);
+            BOOL canScrollVertical = ((scv.contentSize.height + inset.top + inset.bottom) > CGRectGetHeight(scv.bounds));
+            if (canScrollVertical) {
+                if (judgeInnerSVBehaviorInfo) {
+                    NSString *svptr = [NSString stringWithFormat:@"%p", scv];
+                    NSNumber *prioritynum = [_innerSVBehaviorInfo objectForKey:svptr];
+                    if ([prioritynum isKindOfClass:[NSNumber class]]
+                        && prioritynum.integerValue == 3) {
+                        [muar addObject:scv];
+                    }
+                } else {
+                    [muar addObject:scv];
+                }
+            }
+        }
+        
+        resp = resp.nextResponder;
+    }
+    return muar;
+}
+
+/*
+ 通过索引值获取捕获的scrollView
+ */
+- (UIScrollView *)__obtainScrollViewWithIdx:(NSInteger)idx {
+    if (-1 == idx) {
+        return _currentScrollView;
+    } else {
+        return [_innerSVBehaviorInfo objectForKey:@(idx)];
+    }
+}
+
+/*
  有监测到超过1个可捕获的scrollView时，才会往svBehaviorDic里塞内容，否则svBehaviorDic没意义就不塞内容
  */
 - (UIScrollView *)__seekTargetScrollViewFrom:(UIView *)view svBehaviorDic:(NSMutableDictionary *)svBehaviorDic {
@@ -448,40 +509,41 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
     UIScrollView *maxhsc = nil; //高度最大的scrollView
     UIScrollView *thsc = nil;   //寻找第一个可滑动的scrollView
     UIResponder *resp = view;
+    //计算有几层scrollView嵌套，标记其层次
+    NSInteger hierarchy = 0;
     while (resp) {
-        if (resp == self) {
+        if (self == resp) {
             break;
         }
         
         if ([resp isKindOfClass:[UIScrollView class]] && [(UIScrollView *)resp isScrollEnabled]) {
             UIScrollView *scv = (UIScrollView *)resp;
-            
+            hierarchy += 1;
             BOOL scvalid = YES;
             if (self.dragScrollDelegate &&
                 [self.dragScrollDelegate respondsToSelector:@selector(dragScrollView:canCatchInnerSV:)]) {
                 scvalid = [self.dragScrollDelegate dragScrollView:self canCatchInnerSV:scv];
             }
             
+            NSMutableDictionary *scdic;
+            if (svbehar) {
+                scdic = @{}.mutableCopy;
+                [scdic setObject:scv forKey:@"sv"];
+            }
+            
+            /*
+             0：该ScrollView的交互和滑动效果将与DragScrollView共存
+             -1: 该ScrollView的交互与DragScrollView不共存，若冲突则取消该ScrollView的交互响应
+             1: 该ScrollView的交互与DragScrollView不共存，若冲突则取消该DragScrollView的交互响应
+             2：该ScrollView的交互与DragScrollView不共存, 但冲突时不做强制处理，交给系统默认行为(内部的横滑scrollView默认使用该优先级，用来保障横滑和竖滑不共存，并视滑动方向自动选择哪个有效)
+             3: 参与交互滑动
+             */
+            NSInteger priority = 0;
             if (scvalid) {
-                NSMutableDictionary *scdic;
-                if (svbehar) {
-                    scdic = @{}.mutableCopy;
-                    [scdic setObject:scv forKey:@"sv"];
-                }
-                
-                /*
-                 0：该ScrollView的交互和滑动效果将与DragScrollView共存
-                 -1: 该ScrollView的交互与DragScrollView不共存，若冲突则取消该ScrollView的交互响应
-                 1: 该ScrollView的交互与DragScrollView不共存，若冲突则取消该DragScrollView的交互响应
-                 2：该ScrollView的交互与DragScrollView不共存, 但冲突时不做强制处理，交给系统默认行为(内部的横滑scrollView默认使用该优先级，用来保障横滑和竖滑不共存，并视滑动方向自动选择哪个有效)
-                 */
-                NSInteger priority = 0;
-                
+                priority = 3;
                 UIEdgeInsets inset = sf_common_contentInset(scv);
-                //是否能竖向滑动
                 if (!thsc
-                    && ((scv.contentSize.height + inset.top + inset.bottom)
-                        > CGRectGetHeight(scv.bounds))) {
+                    && ((scv.contentSize.height + inset.top + inset.bottom) > CGRectGetHeight(scv.bounds))) {
                     thsc = scv;
                     if (!svbehar) {
                         break;
@@ -502,10 +564,14 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                     }
                 }
                 
-                if (scdic) {
-                    [scdic setObject:@(priority) forKey:@"priority"];
-                    [svbehar addObject:scdic];
-                }
+            } else {
+                //不处理捕获
+                priority = 2;
+            }
+            
+            if (scdic) {
+                [scdic setObject:@(priority) forKey:@"priority"];
+                [svbehar addObject:scdic];
             }
         }
         
@@ -564,6 +630,20 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
             && [self.dragScrollDelegate respondsToSelector:@selector(dragScrollView:catchAndPriorityInfo:)]) {
             [self.dragScrollDelegate dragScrollView:self catchAndPriorityInfo:svbehaviordic];
             selscv = [svbehaviordic objectForKey:@"catchSV"] ? : selscv;
+        }
+        
+        NSArray<NSDictionary *> *otherSVBehaviorAr = svbehaviordic[@"otherSVBehaviorAr"];
+        if ([otherSVBehaviorAr isKindOfClass:[NSArray class]]) {
+            [otherSVBehaviorAr enumerateObjectsUsingBlock:^(NSDictionary * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+                UIScrollView *sv = [obj objectForKey:@"sv"];
+                NSNumber *prioritynum = obj[@"priority"];
+                if ([sv isKindOfClass:[UIScrollView class]]
+                    && [prioritynum isKindOfClass:[NSNumber class]]) {
+                    //优先级信息存储
+                    [svbehaviordic setObject:prioritynum
+                                      forKey:[NSString stringWithFormat:@"%p", sv]];
+                }
+            }];
         }
         
         _innerSVBehaviorInfo = svbehaviordic;
@@ -647,8 +727,17 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                 if (_currentScrollView && _lastScrollIsInner) {
                     //若滑动的捕获sc内部
                     if ([self __findViewHierarchy:htv] > 2) {
-                        //点击内部需不响应其内部内容
-                        return _currentScrollView;
+                        NSArray<UIScrollView *> *svar = [self __seekScrollViewMultipleNesting:htv
+                                                                                      endView:_currentScrollView
+                                                                                includeTarget:YES
+                                                                     judgeInnerSVBehaviorInfo:NO];
+                        //点击内部不响应其内部内容，scrollView除外
+                        if (svar.count > 0) {
+                            return svar.firstObject;
+                        } else {
+                            
+                            return _currentScrollView;
+                        }
                     } else {
                         //点击非捕获sc内，正常响应即可
                         return htv;
@@ -882,6 +971,11 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         _lastInnerSCSize = CGSizeZero;
         _lastSetInnerOSy = CGPointZero;
         _missAttachAndNeedsReload = 0;
+        
+        //本次是清空，没有新的currentScrollView设置，则清空innerSVBehaviorInfo相关信息
+        if (!currentScrollView) {
+            _innerSVBehaviorInfo = nil;
+        }
     }
     
     contentsize.height = CGRectGetHeight(embedf);
@@ -907,6 +1001,16 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
             [self __addObserveForSc:_currentScrollView];
         }
         
+        //夹在_currentScrollView和embedView层级中间的嵌套scrollView
+        NSMutableArray<UIScrollView *> *nestSvAr = [self __seekScrollViewMultipleNesting:_currentScrollView
+                                                                                 endView:_embedView
+                                                                           includeTarget:NO
+                                                                judgeInnerSVBehaviorInfo:YES];
+        //将捕获的scrollView以索引值为key存入
+        [nestSvAr enumerateObjectsUsingBlock:^(UIScrollView * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+            [_innerSVBehaviorInfo setObject:obj forKey:@(idx + 1)];
+        }];
+        
         _lastInnerSCSize = _currentScrollView.contentSize;
         
         CGFloat onepxiel = sf_getOnePxiel();
@@ -920,6 +1024,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                         + _currentScrollView.contentSize.height
                         + cinset.bottom
                         - CGRectGetHeight(_currentScrollView.bounds));
+        
         BOOL caninnerscroll;
         if (innertotalsc > 0) {
             //有可滑动区域
@@ -952,12 +1057,12 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         }
         
         BODragScrollAttachInfo *innerinfoar =\
-        (BODragScrollAttachInfo *)malloc(MAX(scinnerinfoar.count, 1) * sizeof(BODragScrollAttachInfo));
+        (BODragScrollAttachInfo *)malloc(MAX(scinnerinfoar.count + nestSvAr.count * 2, 1) * sizeof(BODragScrollAttachInfo));
         BOOL innerinfoarhascompmem = NO;
         NSInteger innerinfocount = 0;
         
         BOOL specialinnersc = NO;
-        //向下-1  向上1  没有是0
+        //内部scrollView不再其应该滑动位置，但contentoffset不相符，其应该的滑动位置在当前位置：向下-1  向上1  没有是0，
         NSInteger innerscmayinother = 0;
         NSInteger findwhichidx = -1;
         
@@ -1099,7 +1204,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                     CGFloat inflength = infend - infbegin;
                     CGFloat infosy = infoartotalsc + infodh - sfh;
                     BODragScrollAttachInfo atinf =\
-                    (BODragScrollAttachInfo){infodh, infosy, YES, infbegin, infend, infosy + inflength};
+                    (BODragScrollAttachInfo){-1, infodh, infosy, YES, infbegin, infend, infosy + inflength};
                     if (haslastinfo && atinf.dragSVOffsetY <= lastatinfo.dragSVOffsetY) {
                         //数据非法
                         continue;
@@ -1187,10 +1292,10 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                 }
 #endif
                 
-                BOOL findbeg = NO; //是否找到开始滑动内部时的位置
-                
-                if (!findbeg && self.attachDisplayHAr.count > 0) {
+                if (self.attachDisplayHAr.count > 0) {
                     //有吸附点
+                    BOOL findbeg = NO; //是否找到开始滑动内部时的位置
+                    
                     CGFloat beginscdh = 0;
                     CGFloat totalinnerscdh = dyembedtosc + scheight;
                     NSInteger theidx = bo_findIdxInFloatArrayByValue(self.attachDisplayHAr, totalinnerscdh, NO, YES);
@@ -1263,12 +1368,20 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                         scinnerts = shouldscbgts;
                     }
                     
+                } else {
+                    //没有指定吸附点
+                    //指定优先拖拽整体，再滑动内部
+                    if (self.prefDragCardWhenExpand) {
+                        //等embed滑到最大或者到屏幕顶时开始滑动内部
+                        scinnerts = MAX(embedmints + dyembedtosc, 0.f);
+                    }
                 }
                 
                 CGFloat bofis = dyembedtosc - scinnerts; //开始滑动内部时的offset.y
                 bofis = MAX(MIN(-embedmints, bofis), -embedmaxts);
                 BODragScrollAttachInfo scinf =\
-                (BODragScrollAttachInfo){sfh + bofis, bofis,
+                (BODragScrollAttachInfo){-1,
+                    sfh + bofis, bofis,
                     YES, -cinset.top, -cinset.top + innertotalsc,
                     bofis + innertotalsc};
                 //只有一个内部滑动位置
@@ -1279,8 +1392,107 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
             }
             
             if (innerinfocount > 0) {
-                contentsize.height = CGRectGetHeight(embedf) + innertotalsc;
-                _totalScrollInnerOSy = innertotalsc;
+                __block CGFloat nesttotalsc = 0;
+                //nesting begin
+                if (1 == innerinfocount
+                    && nestSvAr.count > 0) {
+                    //只指定了一个滑动区间，且有多层嵌套scrollView，进行多层滑动交互合并
+                    BODragScrollAttachInfo baseainfo = innerinfoar[0];
+                    
+                    [nestSvAr enumerateObjectsUsingBlock:^(UIScrollView * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+                        UIEdgeInsets onenestinset = sf_common_contentInset(obj);
+                        CGFloat sctatol = (onenestinset.top
+                                           + obj.contentSize.height
+                                           + onenestinset.bottom
+                                           - CGRectGetHeight(obj.bounds));
+                        nesttotalsc += sctatol;
+                    }];
+                    
+                    CGFloat remainnestsc = innertotalsc + nesttotalsc;
+                    CGFloat pa = baseainfo.dragSVOffsetY;
+                    CGFloat pb = baseainfo.dragSVOffsetY2 + nesttotalsc;
+                    NSMutableArray<NSValue *> *infomuar = @[].mutableCopy;
+                    //当前在infomuar的填充位置
+                    NSUInteger fillidx = 0;
+                    //加进去一起遍历
+                    [nestSvAr insertObject:_currentScrollView atIndex:0];
+                    for (NSInteger iidx = nestSvAr.count - 1;
+                         iidx >= 0;
+                         iidx--) {
+                        UIScrollView *thesv = nestSvAr[iidx];
+                        UIEdgeInsets onenestinset = sf_common_contentInset(thesv);
+                        CGFloat thetatol = (onenestinset.top
+                                            + thesv.contentSize.height
+                                            + onenestinset.bottom
+                                            - CGRectGetHeight(thesv.bounds));
+                        remainnestsc -= thetatol;
+                        UIScrollView *nextsv = nil;
+                        if (iidx > 0) {
+                            nextsv = nestSvAr[iidx - 1];
+                            UIView *nextsvsuperview = nextsv.superview;
+                            if (!nextsvsuperview) {
+                                continue;
+                            }
+                            //下一级的sv在当前sv中的位置
+                            CGRect nextsvfmfromthesv = [thesv convertRect:nextsv.frame fromView:nextsvsuperview];
+                            if (CGRectGetMinY(nextsvfmfromthesv) <= -onenestinset.top + onepxiel) {
+                                //在展示区域的顶部，先滑next再滑当前，所以在后边插入当前，fillidx不变，继续遍历
+                                BODragScrollAttachInfo theattinfo =\
+                                ((BODragScrollAttachInfo){iidx,
+                                    baseainfo.displayH,
+                                    pb - thetatol,
+                                    YES,
+                                    -onenestinset.top,
+                                    thetatol - onenestinset.top,
+                                    pb});
+                                pb = theattinfo.dragSVOffsetY;
+                                [infomuar insertObject:[NSValue value:&theattinfo withObjCType:@encode(BODragScrollAttachInfo)] atIndex:fillidx];
+                            } else if (CGRectGetMaxY(nextsvfmfromthesv) >= thesv.contentSize.height + onenestinset.bottom - onepxiel) {
+                                //在展示区域的底部，先滑当前再滑下一个，所有插入当前，fillidx增加，继续遍历
+                                BODragScrollAttachInfo theattinfo =\
+                                ((BODragScrollAttachInfo){iidx,
+                                    baseainfo.displayH,
+                                    pa,
+                                    YES,
+                                    -onenestinset.top,
+                                    thetatol - onenestinset.top,
+                                    pa + thetatol});
+                                pa = theattinfo.dragSVOffsetY2;
+                                [infomuar insertObject:[NSValue value:&theattinfo withObjCType:@encode(BODragScrollAttachInfo)] atIndex:fillidx];
+                                fillidx += 1;
+                            } else {
+                                //在中间，待开发
+                                continue;
+                            }
+                        } else {
+                            //iidx=0时为currScrollView，BODragScrollAttachInfo的scrollViewIdx用-1表示currScrollView，0用来表示无。
+                            BODragScrollAttachInfo theattinfo =\
+                            ((BODragScrollAttachInfo){-1,
+                                baseainfo.displayH,
+                                pa,
+                                YES,
+                                -onenestinset.top,
+                                thetatol - onenestinset.top,
+                                pa + thetatol});
+                            [infomuar insertObject:[NSValue value:&theattinfo withObjCType:@encode(BODragScrollAttachInfo)] atIndex:fillidx];
+                            fillidx += 1;
+                        }
+                        
+                    }
+                    
+                    if (infomuar.count > 0) {
+                        for (NSInteger iidx = 0; iidx < infomuar.count; iidx++) {
+                            BODragScrollAttachInfo theinfo;
+                            [infomuar[iidx] getValue:&theinfo];
+                            innerinfoar[iidx] = theinfo;
+                        }
+                        innerinfocount = infomuar.count;
+                    }
+                }
+                //nesting end
+                
+                contentsize.height = CGRectGetHeight(embedf) + innertotalsc + nesttotalsc;
+                _totalScrollInnerOSy = innertotalsc + nesttotalsc;
                 
                 _innerSVAttInfAr = innerinfoar;
                 innerinfoarhascompmem = YES;
@@ -1302,10 +1514,18 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
             
             //innercursc  embedcurrts  topbounces  bottombounces
             CGPoint inneroffset = _currentScrollView.contentOffset;
+            CGFloat tatolsc = innercursc;
             if (_innerSVAttInfCount > 0) {
+                //设置当前内部inneroffset.y的值
                 CGFloat addtotalsc = 0;
                 for (NSInteger infoidx = 0; infoidx < _innerSVAttInfCount; infoidx++) {
                     BODragScrollAttachInfo theinfo = _innerSVAttInfAr[infoidx];
+                    UIScrollView *theinfosv = [self __obtainScrollViewWithIdx:theinfo.scrollViewIdx];
+                    if (theinfosv != _currentScrollView) {
+                        tatolsc += MAX(MIN(theinfosv.contentOffset.y, theinfo.innerOffsetB) - theinfo.innerOffsetA, 0.f);
+                        continue;
+                    }
+                    
                     CGFloat infodur = theinfo.innerOffsetB - theinfo.innerOffsetA;
                     if (addtotalsc + infodur > innercursc) {
                         inneroffset.y = theinfo.innerOffsetA + innercursc - addtotalsc;
@@ -1335,7 +1555,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                 
                 hasbounces = YES;
             } else {
-                embedf.origin.y = innercursc;
+                embedf.origin.y = tatolsc;
                 sfoffset.y = embedf.origin.y - embedcurrts;
             }
             
@@ -1856,15 +2076,22 @@ static void *sf_observe_context = "sf_observe_context";
     }
     BOOL isinnersc = NO;
     CGFloat innertotalsc = _totalScrollInnerOSy;
-    UIEdgeInsets cinset = UIEdgeInsetsZero;
     BOOL triggerinner = NO;
     //暂时不用这个属性，后续有需求可能会用
     __unused BOOL isbounces = NO;
-    
     if (_innerSVAttInfCount > 0) {
         CGFloat innershouldosy = _currentScrollView.contentOffset.y;
-        CGFloat innerminosy = _innerSVAttInfAr[0].innerOffsetA;
-        CGFloat innermaxosy = _innerSVAttInfAr[_innerSVAttInfCount - 1].innerOffsetB;
+        
+        CGFloat innerminosy = CGFLOAT_MAX;
+        CGFloat innermaxosy = CGFLOAT_MIN;
+        for (NSInteger iidx = 0; iidx < _innerSVAttInfCount; iidx++) {
+            BODragScrollAttachInfo iinfo = _innerSVAttInfAr[iidx];
+            UIScrollView *theinfosv = [self __obtainScrollViewWithIdx:iinfo.scrollViewIdx];
+            if (theinfosv == _currentScrollView) {
+                innerminosy = MIN(innerminosy, iinfo.innerOffsetA);
+                innermaxosy = MAX(innermaxosy, iinfo.innerOffsetB);
+            }
+        }
         CGFloat minosy = -self.contentInset.top;
         CGFloat maxosy = MAX(self.contentSize.height + self.contentInset.bottom - CGRectGetHeight(self.bounds),
                              -self.contentInset.top);
@@ -1878,11 +2105,11 @@ static void *sf_observe_context = "sf_observe_context";
             
             if ((self.allowBouncesCardTop &&
                  (self.prefBouncesCardTop || !_currentScrollView.bounces))) {
-                innershouldosy = innerminosy - cinset.top;
+                innershouldosy = innerminosy;
                 embedf.origin.y = 0;
             } else {
                 if (_currentScrollView.bounces) {
-                    innershouldosy = innerminosy - topext - cinset.top;
+                    innershouldosy = innerminosy - topext;
                     embedf.origin.y = -topext;
                     
                     isinnersc = YES;
@@ -1891,7 +2118,7 @@ static void *sf_observe_context = "sf_observe_context";
                     CGPoint co = self.contentOffset;
                     co.y = minosy;
                     embedf.origin.y = 0;
-                    innershouldosy = innerminosy - cinset.top;
+                    innershouldosy = innerminosy;
                     [self innerSetting:^{
                         self.contentOffset = co;
                     }];
@@ -1900,7 +2127,7 @@ static void *sf_observe_context = "sf_observe_context";
             }
         } else if (offsety < _minScrollInnerOSy) {
             //正常滑动，还没有进入内部滑动范围
-            innershouldosy = innerminosy - cinset.top;
+            innershouldosy = innerminosy;
             embedf.origin.y = 0;
             
         } else if (offsety <= _maxScrollInnerOSy) {
@@ -1909,14 +2136,22 @@ static void *sf_observe_context = "sf_observe_context";
             BOOL findtheinfo = NO;
             for (NSInteger infoidx = 0; infoidx < _innerSVAttInfCount; infoidx++) {
                 BODragScrollAttachInfo innerscinfo = _innerSVAttInfAr[infoidx];
-                CGFloat infomaxsc = innerscinfo.innerOffsetB - innerscinfo.innerOffsetA;
+                UIScrollView *theinfosv = [self __obtainScrollViewWithIdx:innerscinfo.scrollViewIdx];
                 if (offsety + sf_getOnePxiel() >= innerscinfo.dragSVOffsetY) {
+                    CGFloat infomaxsc = innerscinfo.innerOffsetB - innerscinfo.innerOffsetA;
                     if (infoidx + 1 < _innerSVAttInfCount) {
                         //有下一个
                         BODragScrollAttachInfo nextinfo = _innerSVAttInfAr[infoidx + 1];
                         if (offsety < nextinfo.dragSVOffsetY) {
                             //使用当前
                         } else {
+                            if (theinfosv == _currentScrollView) {
+                                innershouldosy = innerscinfo.innerOffsetB;
+                            } else {
+                                CGPoint theos = theinfosv.contentOffset;
+                                theos.y = innerscinfo.innerOffsetB;
+                                theinfosv.contentOffset = theos;
+                            }
                             cursclength += infomaxsc;
                             continue;
                         }
@@ -1927,12 +2162,25 @@ static void *sf_observe_context = "sf_observe_context";
                     
                     CGFloat exty = offsety - innerscinfo.dragSVOffsetY;
                     if (exty > infomaxsc) {
+                        //超过了
                         cursclength += infomaxsc;
-                        innershouldosy = innerscinfo.innerOffsetB;
+                        if (theinfosv == _currentScrollView) {
+                            innershouldosy = innerscinfo.innerOffsetB;
+                        } else {
+                            CGPoint theos = theinfosv.contentOffset;
+                            theos.y = innerscinfo.innerOffsetB;
+                            theinfosv.contentOffset = theos;
+                        }
                         isinnersc = NO;
                     } else {
                         cursclength += exty;
-                        innershouldosy = innerscinfo.innerOffsetA + exty;
+                        if (theinfosv == _currentScrollView) {
+                            innershouldosy = innerscinfo.innerOffsetA + exty;
+                        } else {
+                            CGPoint theos = theinfosv.contentOffset;
+                            theos.y = innerscinfo.innerOffsetA + exty;
+                            theinfosv.contentOffset = theos;
+                        }
                         //exty是0的话，标识已经到外部了
                         isinnersc = (exty > 0);
                     }
@@ -1945,14 +2193,14 @@ static void *sf_observe_context = "sf_observe_context";
             if (findtheinfo) {
                 triggerinner = YES;
             } else {
-                innershouldosy = innerminosy - cinset.top;
+                innershouldosy = innerminosy;
                 embedf.origin.y = 0;
                 isinnersc = NO;
             }
             
         } else if (offsety <= maxosy) {
             //正常滑动，不在内部滑动范围
-            innershouldosy = innermaxosy - cinset.top;
+            innershouldosy = innermaxosy;
             embedf.origin.y = innertotalsc;
             
         } else {
@@ -1967,12 +2215,12 @@ static void *sf_observe_context = "sf_observe_context";
                  || !_currentScrollView.bounces)) {
                 //bounces外部
                 embedf.origin.y = innertotalsc;
-                innershouldosy = innermaxosy - cinset.top;
+                innershouldosy = innermaxosy;
             } else {
                 //bounces内部
                 if (_currentScrollView.bounces) {
                     embedf.origin.y = innertotalsc + bottomext;
-                    innershouldosy = innermaxosy + bottomext - cinset.top;
+                    innershouldosy = innermaxosy + bottomext;
                     
                     isinnersc = YES;
                 } else {
@@ -1980,7 +2228,7 @@ static void *sf_observe_context = "sf_observe_context";
                     CGPoint co = self.contentOffset;
                     co.y = maxosy;
                     embedf.origin.y = innertotalsc;
-                    innershouldosy = innermaxosy - cinset.top;
+                    innershouldosy = innermaxosy;
                     [self innerSetting:^{
                         self.contentOffset = co;
                     }];
@@ -2113,7 +2361,7 @@ static void *sf_observe_context = "sf_observe_context";
         
         if (idxb < _innerSVAttInfCount) {
             binfo = _innerSVAttInfAr[idxb];
-            if (aYESbNO && aYESbNO.boolValue) {
+            if (nil != aYESbNO && aYESbNO.boolValue) {
                 if (binfo.displayH < (adh - sf_getOnePxiel())) {
                     aYESbNO = @(NO);
                     idxb++;
@@ -2126,6 +2374,7 @@ static void *sf_observe_context = "sf_observe_context";
                     idxb++;
                 }
             } else {
+                aYESbNO = @(NO);
                 idxb++;
             }
         } else {
@@ -2137,7 +2386,7 @@ static void *sf_observe_context = "sf_observe_context";
             if (aYESbNO.boolValue) {
                 CGFloat dosy = totalinnersc + adh - sfh;
                 newinfo =\
-                (BODragScrollAttachInfo){adh, dosy, NO, 0, 0, dosy};
+                (BODragScrollAttachInfo){0, adh, dosy, NO, 0, 0, dosy};
             } else {
                 //                CGFloat dosy = totalinnersc + binfo.displayH - sfh;
                 //                atinfoar[curcount] =\
@@ -2612,8 +2861,7 @@ static void *sf_observe_context = "sf_observe_context";
                      withVelocity:(CGPoint)velocity
               targetContentOffset:(inout CGPoint *)targetContentOffset {
     
-    BODragScrollAttachInfo theinfo =\
-    (BODragScrollAttachInfo){0, 0, NO, 0, 0, 0};
+    BODragScrollAttachInfo theinfo;
     NSInteger scrolltype =\
     [self __scrollViewWillEndDragging:scrollView
                          withVelocity:velocity
@@ -2900,6 +3148,8 @@ shouldRequireFailureOfGestureRecognizer:(UIGestureRecognizer *)otherGestureRecog
                         return YES;
                     case 2:
                         return NO;
+                    case 3:
+                        return NO;
                     default:
                         return NO;
                 }
@@ -2960,6 +3210,8 @@ shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)otherGestureRec
                             return NO;
                         case 2:
                             return NO;
+                        case 3:
+                            return YES;
                         default:
                             return NO;
                     }
@@ -3047,6 +3299,8 @@ shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)otherGestureRec
                                     return NO;
                                 case 2:
                                     return NO;
+                                case 3:
+                                    return NO;
                                 default:
                                     return NO;
                             }
@@ -3096,8 +3350,7 @@ shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)otherGestureRec
         !self.isDecelerating) {
         
         //若本次点击导致了动画停止，点击结束后，没有触发scroll的惯性，则需要手动进行一次吸附行为，防止停留位置不对
-        BODragScrollAttachInfo theinfo =\
-        (BODragScrollAttachInfo){0, 0, NO, 0, 0, 0};
+        BODragScrollAttachInfo theinfo;
         CGPoint of = self.contentOffset;
         CGPoint inof = of;
         __unused NSInteger scrolltype =\

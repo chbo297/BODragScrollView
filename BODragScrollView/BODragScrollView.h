@@ -164,7 +164,8 @@ FOUNDATION_EXTERN NSInteger bo_findIdxInFloatArrayByValue(NSArray<NSNumber *> *a
  // -1: 该ScrollView的交互与DragScrollView不共存，若冲突则取消该ScrollView的交互响应
  // 1: 该ScrollView的交互与DragScrollView不共存，若冲突则取消该DragScrollView的交互响应
  // 2：该ScrollView的交互与DragScrollView不共存, 但冲突时不做强制处理，交给系统默认行为(内部的横滑scrollView默认使用该优先级，用来保障横滑和竖滑不共存，并视滑动方向自动选择哪个有效)
- @"priority": @(-1/0/1/2)
+ // 3: 融入交互滑动中
+ @"priority": @(-1/0/1/2/3)
  }
  ]
  }
@@ -327,6 +328,15 @@ FOUNDATION_EXTERN NSInteger bo_findIdxInFloatArrayByValue(NSArray<NSNumber *> *a
  （该值需小于embed的高度）
  */
 @property (nonatomic, strong, nullable) NSNumber *minDisplayH;
+
+/*
+ embedView内部的scrollView内还嵌套scrollView时，定义其滑动位置的行为
+ nil: 默认判定，优先展开全部子视图后再开始滑或者从当前触发位置开始滑，当prefDragCardWhenExpand=YES时，子视图在父视图中展示到最上部再开始滑子视图。
+ 0: 从当前位置开始，优先子视图，再父视图
+ 1: 子视图在父视图中展示全就可以开始滑子视图了
+ 2: 子视图在父视图中展示到最上部再开始滑子视图
+ */
+@property (nonatomic, strong, nullable) NSNumber *nestingScrollStyle;
 
 //是否自动展示内部scrollview的Indictor
 @property (nonatomic, assign) BOOL autoShowInnerIndictor;
