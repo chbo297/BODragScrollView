@@ -1448,7 +1448,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                                 pb = theattinfo.dragSVOffsetY;
                                 [infomuar insertObject:[NSValue value:&theattinfo withObjCType:@encode(BODragScrollAttachInfo)] atIndex:fillidx];
                             } else if (CGRectGetMaxY(nextsvfmfromthesv) >= thesv.contentSize.height + onenestinset.bottom - onepxiel) {
-                                //在展示区域的底部，先滑当前再滑下一个，所有插入当前，fillidx增加，继续遍历
+                                //在展示区域的底部，先滑当前再滑下一个，所以插入当前，fillidx增加，继续遍历
                                 BODragScrollAttachInfo theattinfo =\
                                 ((BODragScrollAttachInfo){iidx,
                                     baseainfo.displayH,
@@ -1461,8 +1461,52 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                                 [infomuar insertObject:[NSValue value:&theattinfo withObjCType:@encode(BODragScrollAttachInfo)] atIndex:fillidx];
                                 fillidx += 1;
                             } else {
-                                //在中间，待开发
-                                continue;
+                                //在中间
+                                //底部长出多少
+                                CGFloat bottomexp = thesv.contentSize.height + onenestinset.bottom - CGRectGetMaxY(nextsvfmfromthesv);
+                                CGFloat topext = CGRectGetHeight(thesv.bounds) - (bottomexp + CGRectGetHeight(nextsvfmfromthesv));
+                                if (topext + onepxiel >= 0) {
+                                    //展示区域可以把下一个sv全展示，先滑当前即可
+                                    BODragScrollAttachInfo theattinfo =\
+                                    ((BODragScrollAttachInfo){iidx,
+                                        baseainfo.displayH,
+                                        pa,
+                                        YES,
+                                        -onenestinset.top,
+                                        thetatol - onenestinset.top,
+                                        pa + thetatol});
+                                    pa = theattinfo.dragSVOffsetY2;
+                                    [infomuar insertObject:[NSValue value:&theattinfo withObjCType:@encode(BODragScrollAttachInfo)] atIndex:fillidx];
+                                    fillidx += 1;
+                                } else {
+                                    
+                                    //先滑当前到下一个sv可视最大，再滑下一个，再滑当前
+                                    CGFloat minnexty = CGRectGetMinY(nextsvfmfromthesv);
+                                    CGFloat prescroll = onenestinset.top + minnexty;
+                                    BODragScrollAttachInfo theattinfo =\
+                                    ((BODragScrollAttachInfo){iidx,
+                                        baseainfo.displayH,
+                                        pa,
+                                        YES,
+                                        -onenestinset.top,
+                                        minnexty,
+                                        pa + prescroll});
+                                    pa = theattinfo.dragSVOffsetY2;
+                                    [infomuar insertObject:[NSValue value:&theattinfo withObjCType:@encode(BODragScrollAttachInfo)] atIndex:fillidx];
+                                    fillidx += 1;
+                                    
+                                    CGFloat remainscroll = thetatol - prescroll;
+                                    BODragScrollAttachInfo theattinfo2 =\
+                                    ((BODragScrollAttachInfo){iidx,
+                                        baseainfo.displayH,
+                                        pb - remainscroll,
+                                        YES,
+                                        minnexty,
+                                        thetatol - onenestinset.top,
+                                        pb});
+                                    pb = pb - remainscroll;
+                                    [infomuar insertObject:[NSValue value:&theattinfo2 withObjCType:@encode(BODragScrollAttachInfo)] atIndex:fillidx];
+                                }
                             }
                         } else {
                             //iidx=0时为currScrollView，BODragScrollAttachInfo的scrollViewIdx用-1表示currScrollView，0用来表示无。
