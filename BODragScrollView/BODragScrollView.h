@@ -127,9 +127,9 @@ FOUNDATION_EXTERN NSInteger bo_findIdxInFloatArrayByValue(NSArray<NSNumber *> *a
  没有实现该方法时，读取defaultDecelerateStyle
  */
 - (BODragScrollDecelerateStyle)dragScrollViewDecelerate:(BODragScrollView *)dragScrollView
-                                                    fromH:(CGFloat)fromH
-                                                      toH:(CGFloat)toH
-                                                   reason:(NSString *)reason;
+                                                  fromH:(CGFloat)fromH
+                                                    toH:(CGFloat)toH
+                                                 reason:(NSString *)reason;
 
 /*
  当本ScrollView遇到与其它View(非所捕获的scrollView，捕获时当然是本scrollView优先)的手势冲突时，

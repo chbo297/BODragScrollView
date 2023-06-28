@@ -1165,13 +1165,32 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                 BODragScrollAttachInfo lastatinfo;
                 CGFloat infoartotalsc = 0;
                 BOOL haslastinfo = NO;
+                
+                CGFloat beginOffsetY = -cinset.top;
                 for (NSInteger innerdicidx = 0; innerdicidx < scinnerinfoar.count; innerdicidx++) {
                     NSDictionary *innerscdic = scinnerinfoar[innerdicidx];
                     NSNumber *dhval = [innerscdic objectForKey:@"displayH"];
+                    if (nil == dhval) {
+                        continue;
+                    }
+                    
+                    //若beginOffsetY、endOffsetY没有填值，进行默认填充
                     NSNumber *beginval = [innerscdic objectForKey:@"beginOffsetY"];
+                    //首个、没有填beginOffsetY则默认从最顶部开始
+                    if (0 == innerdicidx
+                        && nil == beginval) {
+                        beginval = @(beginOffsetY);
+                    }
+                    
                     NSNumber *endval = [innerscdic objectForKey:@"endOffsetY"];
-                    if ((nil == dhval)
-                        || (nil == beginval)
+                    //最后一个、没有填endval，则默认到底
+                    if (scinnerinfoar.count - 1 == innerdicidx
+                        && nil == endval) {
+                        endval = @((innertotalsc > 0) ? (innertotalsc - beginOffsetY) : beginOffsetY);
+                    }
+                    
+                    //还没有值，此数据非法，执行抛弃
+                    if ((nil == beginval)
                         || (nil == endval)) {
                         continue;
                     }
@@ -2979,7 +2998,7 @@ static void *sf_observe_context = "sf_observe_context";
                     [self.dragScrollDelegate respondsToSelector:@selector(dragScrollView:didTargetToH:reason:)]) {
                     [self.dragScrollDelegate dragScrollView:self
                                                didTargetToH:self.currDisplayH
-                                                     reason:@"outset-ani"];
+                                                     reason:@"inset-ani"];
                 }
             }];
         }
