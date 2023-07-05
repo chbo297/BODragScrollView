@@ -273,6 +273,8 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
 @property (nonatomic, assign) BOOL innerSetting;
 
 @property (nonatomic, strong) UIScrollView *currentScrollView; //当前捕获的内部scrollView
+@property (nonatomic, assign) BOOL currentScrollViewHasObserver;
+
 
 @property (nonatomic, assign) BOOL isScrollAnimating;
 
@@ -952,7 +954,11 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
          移除内部ScrollView
          */
         if (!issame) {
-            [self __removeObserveForSc:_currentScrollView];
+            if (self.currentScrollViewHasObserver) {
+                [self __removeObserveForSc:_currentScrollView];
+                self.currentScrollViewHasObserver = NO;
+            }
+            
             if (_needsRecoverScrollVAllowScrollToTop) {
                 _currentScrollView.scrollsToTop = YES;
                 _needsRecoverScrollVAllowScrollToTop = NO;
@@ -998,7 +1004,10 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                 _currentScrollView.scrollsToTop = NO;
                 _needsRecoverScrollVAllowScrollToTop = YES;
             }
-            [self __addObserveForSc:_currentScrollView];
+            if (!self.innerScrollViewFirst) {
+                [self __addObserveForSc:_currentScrollView];
+                self.currentScrollViewHasObserver = YES;
+            }
         }
         
         //夹在_currentScrollView和embedView层级中间的嵌套scrollView
@@ -2067,6 +2076,11 @@ static void *sf_observe_context = "sf_observe_context";
     if (_currentScrollView && _innerSVAttInfCount > 0) {
         [self __setupCurrentScrollView:_currentScrollView];
     }
+}
+
+- (void)setInnerScrollViewFirst:(BOOL)innerScrollViewFirst {
+    _innerScrollViewFirst = innerScrollViewFirst;
+    super.delaysContentTouches = _innerScrollViewFirst;
 }
 
 #pragma mark - scrollView delegate
@@ -3175,7 +3189,11 @@ shouldRequireFailureOfGestureRecognizer:(UIGestureRecognizer *)otherGestureRecog
         return NO;
     } else if (gestureRecognizer.view == self) {
         if (otherGestureRecognizer.view == _currentScrollView) {
-            return NO;
+            if (self.innerScrollViewFirst) {
+                return YES;
+            } else {
+                return NO;
+            }
         } else {
             //本组件的gestureRecognizer碰到其它View（非当前捕获_currentScrollView）
             if (self.dragScrollDelegate &&
@@ -3232,7 +3250,11 @@ shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)otherGestureRec
         return NO;
     } else if (gestureRecognizer.view == self) {
         if (otherGestureRecognizer.view == _currentScrollView) {
-            return YES;
+            if (self.innerScrollViewFirst) {
+                return NO;
+            } else {
+                return YES;
+            }
         } else {
             //本组件的gestureRecognizer碰到其它View（非当前捕获_currentScrollView）
             if (self.dragScrollDelegate &&
@@ -3303,6 +3325,7 @@ shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)otherGestureRec
             return NO;
         } else if (otherGestureRecognizer.view == _currentScrollView) {
             //滑动时只滑外部，内部由代码控制。所以不可以与内部捕获的scrollview手势共存，外部优先，取消内部scrollview的手势
+            //innerScrollViewFirst情况也不需要共存
             return NO;
         } else {
             if (self.dragScrollDelegate &&
@@ -3404,6 +3427,13 @@ shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)otherGestureRec
         
         return _needsFixDisplayHWhenTouchEnd;
     }
+    
+    if (gestureRecognizer.view == self
+        && self.innerScrollViewFirst
+        && nil != _currentScrollView) {
+        return NO;
+    }
+    
     return YES;
 }
 

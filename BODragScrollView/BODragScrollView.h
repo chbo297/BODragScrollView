@@ -338,6 +338,12 @@ FOUNDATION_EXTERN NSInteger bo_findIdxInFloatArrayByValue(NSArray<NSNumber *> *a
  */
 @property (nonatomic, strong, nullable) NSNumber *nestingScrollStyle;
 
+/*
+ 默认是NO
+ 设YES后，业务内部的ScrollView优先相应，卡片交互效果不再联动。
+ */
+@property (nonatomic, assign) BOOL innerScrollViewFirst;
+
 //是否自动展示内部scrollview的Indictor
 @property (nonatomic, assign) BOOL autoShowInnerIndictor;
 
