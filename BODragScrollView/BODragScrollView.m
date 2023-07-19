@@ -918,7 +918,6 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
     }
 #endif
     
-    
     CGRect embedf = _embedView.frame;
     CGFloat embedcurrts = CGRectGetMinY(embedf) - self.contentOffset.y;
     
