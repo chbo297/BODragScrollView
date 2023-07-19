@@ -911,7 +911,13 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
 - (void)__setupCurrentScrollView:(UIScrollView *)currentScrollView {
 #if DEBUG
     NSAssert(_embedView != nil, @"embedview should not be nil");
+    if (![NSThread isMainThread]) {
+        @throw [NSException exceptionWithName:@"Main Thread Checker"
+                                       reason:@"Main Thread Checker: UI API called on a background thread: __setupCurrentScrollView:"
+                                     userInfo:nil];
+    }
 #endif
+    
     
     CGRect embedf = _embedView.frame;
     CGFloat embedcurrts = CGRectGetMinY(embedf) - self.contentOffset.y;
@@ -1731,6 +1737,17 @@ static void *sf_observe_context = "sf_observe_context";
                       ofObject:(id)object
                         change:(NSDictionary<NSKeyValueChangeKey, id> *)change
                        context:(void *)context {
+    if (![NSThread isMainThread]) {
+#if DEBUG
+        @throw [NSException exceptionWithName:@"Main Thread Checker"
+                                       reason:@"Main Thread Checker: UI API called on a background thread: setAttachDisplayHAr:"
+                                     userInfo:nil];
+#else
+        //线上的子线程调用保护
+        return;
+#endif
+    }
+    
     if (0 == memcmp(context, sf_observe_context, strlen(sf_observe_context))) {
         if (object == _currentScrollView) {
             if ([keyPath isEqualToString:@"contentSize"] &&
@@ -2012,6 +2029,20 @@ static void *sf_observe_context = "sf_observe_context";
 }
 
 - (void)setAttachDisplayHAr:(NSArray<NSNumber *> *)attachDisplayHAr {
+    if (![NSThread isMainThread]) {
+#if DEBUG
+        @throw [NSException exceptionWithName:@"Main Thread Checker"
+                                       reason:@"Main Thread Checker: UI API called on a background thread: setAttachDisplayHAr:"
+                                     userInfo:nil];
+#else
+        //线上的子线程调用保护
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self setAttachDisplayHAr:attachDisplayHAr];
+        });
+        return;
+#endif
+    }
+    
     //排序
     _attachDisplayHAr =\
     [attachDisplayHAr sortedArrayUsingComparator:^NSComparisonResult(NSNumber *  _Nonnull obj1, NSNumber *  _Nonnull obj2) {
@@ -2025,12 +2056,40 @@ static void *sf_observe_context = "sf_observe_context";
 }
 
 - (void)setPrefDragCardWhenExpand:(BOOL)prefDragCardWhenExpand {
+    if (![NSThread isMainThread]) {
+#if DEBUG
+        @throw [NSException exceptionWithName:@"Main Thread Checker"
+                                       reason:@"Main Thread Checker: UI API called on a background thread: setPrefDragCardWhenExpand:"
+                                     userInfo:nil];
+#else
+        //线上的子线程调用保护
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self setPrefDragCardWhenExpand:prefDragCardWhenExpand];
+        });
+        return;
+#endif
+    }
+    
     _prefDragCardWhenExpand = prefDragCardWhenExpand;
     
     [self forceReloadCurrInnerScrollView];
 }
 
 - (void)setPrefDragInnerScrollDisplayH:(NSNumber *)prefDragInnerScrollDisplayH {
+    if (![NSThread isMainThread]) {
+#if DEBUG
+        @throw [NSException exceptionWithName:@"Main Thread Checker"
+                                       reason:@"Main Thread Checker: UI API called on a background thread: setPrefDragInnerScrollDisplayH:"
+                                     userInfo:nil];
+#else
+        //线上的子线程调用保护
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self setPrefDragInnerScrollDisplayH:prefDragInnerScrollDisplayH];
+        });
+        return;
+#endif
+    }
+    
     _prefDragInnerScrollDisplayH = prefDragInnerScrollDisplayH;
     
     [self forceReloadCurrInnerScrollView];
@@ -2072,6 +2131,14 @@ static void *sf_observe_context = "sf_observe_context";
 }
 
 - (void)forceReloadCurrInnerScrollView {
+#if DEBUG
+    if (![NSThread isMainThread]) {
+        @throw [NSException exceptionWithName:@"Main Thread Checker"
+                                       reason:@"Main Thread Checker: UI API called on a background thread: forceReloadCurrInnerScrollView"
+                                     userInfo:nil];
+    }
+#endif
+    
     //当前已经捕获了内部滑动视图，且初始化过滑动位置，刷新加载
     if (_currentScrollView && _innerSVAttInfCount > 0) {
         [self __setupCurrentScrollView:_currentScrollView];
