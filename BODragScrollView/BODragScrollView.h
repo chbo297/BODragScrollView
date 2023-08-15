@@ -92,7 +92,7 @@ FOUNDATION_EXTERN NSInteger bo_findIdxInFloatArrayByValue(NSArray<NSNumber *> *a
  
  注:请传正确的类型 数组从小到大排列、endOffsetY>beginOffsetY，由外部保证，内部不做合法校验
  */
-- (NSArray<NSDictionary *> *)dragScrollView:(BODragScrollView *)dragScrollView
+- (nullable NSArray<NSDictionary *> *)dragScrollView:(BODragScrollView *)dragScrollView
                    scrollBehaviorForInnerSV:(__kindof UIScrollView *)innerSV;
 
 /*
@@ -184,7 +184,7 @@ FOUNDATION_EXTERN NSInteger bo_findIdxInFloatArrayByValue(NSArray<NSNumber *> *a
  YES 业务已处理，控件无需再处理
  NO  业务未处理，控件继续默认行为(不再尝试对内里的scrollview进行处理)
  */
-- (NSNumber *)dragScrollView:(BODragScrollView *)dragScrollView accessibilityScroll:(UIAccessibilityScrollDirection)direction;
+- (nullable NSNumber *)dragScrollView:(BODragScrollView *)dragScrollView accessibilityScroll:(UIAccessibilityScrollDirection)direction;
 
 @end
 
@@ -343,6 +343,13 @@ FOUNDATION_EXTERN NSInteger bo_findIdxInFloatArrayByValue(NSArray<NSNumber *> *a
  设YES后，业务内部的ScrollView优先相应，卡片交互效果不再联动。
  */
 @property (nonatomic, assign) BOOL innerScrollViewFirst;
+
+/*
+ 默认是NO
+ 设YES后，若检测到在webView中的多层可竖滑scrollView交互，则不捕获
+ 避免影响web内多层scrollView的特殊效果
+ */
+@property (nonatomic, assign) BOOL ignoreWebMulInnerScroll;
 
 //是否自动展示内部scrollview的Indictor
 @property (nonatomic, assign) BOOL autoShowInnerIndictor;

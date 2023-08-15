@@ -288,7 +288,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
     
     NSNumber *_needsDisplayH;   //一些设置displayH的时机View还没有布局，先存下在，布局的时候读取并设置。
     
-    BOOL _waitMayDecelerate;
+    BOOL _waitDidTargetTo; //调用了willTargetTo，等待调用DidTargetTo
     BOOL _waitMayAnimationScroll;
     void (^_animationScrollDidEndBlock)(void);
     
@@ -308,6 +308,8 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
     __weak UIControl *_theCtrWhenDecInner; //decelerating时点击了某UIControl，为了不使scrollView的系统机制无效其点击事件，手动传递action
     BOOL _lastScrollIsInner; //最后一次滑动位置变化（包括内外），是否是捕获的内部sv
     NSValue *_scrollBeganLoc; //滑动开始的点
+    NSNumber *_dragBeganDH; //滑动开始的展示高度
+    BOOL _dragDHHasChange; //从拖拽起始，到终止，展示高度是否发生过变化（即使起终点相同，中间变化过也算）
     BODragScrollTapGes *_dsTapGes;
     
     //触发内部scrollView时会切换到内部scrollView的rate，用该处存储自己的的rate
@@ -353,7 +355,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         _caAnimationBaseDur = 0.12;
         _caAnimationMaxDur = 0.32;
         _caAnimationUseSpring = YES;
-        _waitMayDecelerate = NO;
+        _waitDidTargetTo = NO;
         _waitMayAnimationScroll = NO;
         _prefDragCardWhenExpand = NO;
         _autoResetInnerSVOffsetWhenAttachMiss = NO;
@@ -458,7 +460,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
     NSMutableArray *muar = @[].mutableCopy;
     UIResponder *resp = includeTarget ? targetView : targetView.nextResponder;
     while (resp) {
-        if (self == resp
+        if (endView == resp
             || nil == resp) {
             break;
         }
@@ -513,6 +515,9 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
     UIResponder *resp = view;
     //计算有几层scrollView嵌套，标记其层次
     NSInteger hierarchy = 0;
+    
+    UIView *thewebview = nil;
+    
     while (resp) {
         if (self == resp) {
             break;
@@ -575,9 +580,23 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                 [scdic setObject:@(priority) forKey:@"priority"];
                 [svbehar addObject:scdic];
             }
+            
+            
+        }
+        
+        if (self.ignoreWebMulInnerScroll
+            && nil == thewebview
+            && [NSStringFromClass([resp class]) isEqualToString:@"WKWebView"]
+            && [resp isKindOfClass:[UIView class]]) {
+            thewebview = (id)resp;
         }
         
         resp = resp.nextResponder;
+    }
+    
+    if (nil != thewebview
+        && svBehaviorDic) {
+        [svBehaviorDic setObject:thewebview forKey:@"webView"];
     }
     
     UIScrollView *selsc = (thsc ? : maxhsc);
@@ -627,6 +646,23 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
     _innerSVBehaviorInfo = nil;
     NSMutableDictionary *svbehaviordic = @{}.mutableCopy;
     UIScrollView *selscv = [self __seekTargetScrollViewFrom:view svBehaviorDic:svbehaviordic];
+    
+    if (self.ignoreWebMulInnerScroll) {
+        UIView *thewebview = [svbehaviordic objectForKey:@"webView"];
+        if (thewebview) {
+            //在webView中，且需要不影响多层可用的web内部scrollView
+            NSArray<UIScrollView *> *nestscar =\
+            [self __seekScrollViewMultipleNesting:selscv
+                                          endView:thewebview
+                                    includeTarget:YES
+                         judgeInnerSVBehaviorInfo:NO];
+            if (nestscar.count >= 2) {
+                //设置了ignoreWebMulInnerScroll，且发现web内有多层嵌套了，不捕获，不干涉，返回即可
+                return;
+            }
+        }
+    }
+    
     if (svbehaviordic.count > 0) {
         if (self.dragScrollDelegate
             && [self.dragScrollDelegate respondsToSelector:@selector(dragScrollView:catchAndPriorityInfo:)]) {
@@ -729,15 +765,15 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                 if (_currentScrollView && _lastScrollIsInner) {
                     //若滑动的捕获sc内部
                     if ([self __findViewHierarchy:htv] > 2) {
-                        NSArray<UIScrollView *> *svar = [self __seekScrollViewMultipleNesting:htv
-                                                                                      endView:_currentScrollView
-                                                                                includeTarget:YES
-                                                                     judgeInnerSVBehaviorInfo:NO];
+                        NSArray<UIScrollView *> *svar =\
+                        [self __seekScrollViewMultipleNesting:htv
+                                                      endView:_currentScrollView
+                                                includeTarget:YES
+                                     judgeInnerSVBehaviorInfo:NO];
                         //点击内部不响应其内部内容，scrollView除外
                         if (svar.count > 0) {
                             return svar.firstObject;
                         } else {
-                            
                             return _currentScrollView;
                         }
                     } else {
@@ -1016,10 +1052,11 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         }
         
         //夹在_currentScrollView和embedView层级中间的嵌套scrollView
-        NSMutableArray<UIScrollView *> *nestSvAr = [self __seekScrollViewMultipleNesting:_currentScrollView
-                                                                                 endView:_embedView
-                                                                           includeTarget:NO
-                                                                judgeInnerSVBehaviorInfo:YES];
+        NSMutableArray<UIScrollView *> *nestSvAr =\
+        [self __seekScrollViewMultipleNesting:_currentScrollView
+                                      endView:self
+                                includeTarget:NO
+                     judgeInnerSVBehaviorInfo:YES];
         //将捕获的scrollView以索引值为key存入
         [nestSvAr enumerateObjectsUsingBlock:^(UIScrollView * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
             [_innerSVBehaviorInfo setObject:obj forKey:@(idx + 1)];
@@ -1886,6 +1923,13 @@ static void *sf_observe_context = "sf_observe_context";
     
     if (!sf_uifloat_equal(_currDisplayH, currDisplayH)) {
         _currDisplayH = currDisplayH;
+        
+        //有手势拖拽的起点，表示实在拖拽过程中，标记高度发生变化
+        if (nil != _dragBeganDH
+            && !_dragDHHasChange) {
+            _dragDHHasChange = YES;
+        }
+        
         if (self.dragScrollDelegate &&
             [self.dragScrollDelegate respondsToSelector:@selector(dragScrollView:displayHDidChange:)]) {
             [self.dragScrollDelegate dragScrollView:self displayHDidChange:_currDisplayH];
@@ -3098,7 +3142,13 @@ static void *sf_observe_context = "sf_observe_context";
     (!sf_uifloat_equal((*targetContentOffset).y, self.contentOffset.y));
     
     NSString *reason = [NSString stringWithFormat:@"willEndDragging%@", willdecelerate ? @"-willdecelerate" : @""];
-    if (11 != scrolltype) {
+    //整个drag过程中，displayHeight没发生过变化，则不用触发TargetTo
+    BOOL ignoretargetto = !_dragDHHasChange;
+    //恢复拖拽相关标记位
+    _dragBeganDH = nil;
+    _dragDHHasChange = NO;
+    
+    if (!ignoretargetto) {
         if (self.dragScrollDelegate &&
             [self.dragScrollDelegate respondsToSelector:@selector(dragScrollView:willTargetToH:reason:)]) {
             [self.dragScrollDelegate dragScrollView:self
@@ -3106,8 +3156,7 @@ static void *sf_observe_context = "sf_observe_context";
                                              reason:reason];
         }
         
-        //自然滑动方式需要等待scrollViewWillEndDragging结束后，调用scrollViewDidEndDragging时调用进行didenddrag调用
-        _waitMayDecelerate = YES;
+        _waitDidTargetTo = YES;
     }
     
     if (22 == scrolltype && willdecelerate) {
@@ -3135,13 +3184,17 @@ static void *sf_observe_context = "sf_observe_context";
                 //滑动方向和手势方向相同
                 vely = fabs(velocity.y);
             }
-            _waitMayDecelerate = NO;
+            
+            BOOL shouldtargetto = _waitDidTargetTo;
+            _waitDidTargetTo = NO;
             [self __liteAnimateToOffset:toos vel:vely completion:^(BOOL isFinish) {
-                if (self.dragScrollDelegate &&
-                    [self.dragScrollDelegate respondsToSelector:@selector(dragScrollView:didTargetToH:reason:)]) {
-                    [self.dragScrollDelegate dragScrollView:self
-                                               didTargetToH:self.currDisplayH
-                                                     reason:@"inset-ani"];
+                if (shouldtargetto) {
+                    if (self.dragScrollDelegate &&
+                        [self.dragScrollDelegate respondsToSelector:@selector(dragScrollView:didTargetToH:reason:)]) {
+                        [self.dragScrollDelegate dragScrollView:self
+                                                   didTargetToH:self.currDisplayH
+                                                         reason:@"inset-ani"];
+                    }
                 }
             }];
         }
@@ -3159,8 +3212,8 @@ static void *sf_observe_context = "sf_observe_context";
         [self.dragScrollDelegate scrollViewDidEndDragging:scrollView willDecelerate:decelerate];
     }
     
-    if (!decelerate && _waitMayDecelerate) {
-        _waitMayDecelerate = NO;
+    if (!decelerate && _waitDidTargetTo) {
+        _waitDidTargetTo = NO;
         //会在稍后停止TrackingRunLoopMode
         if (self.dragScrollDelegate &&
             [self.dragScrollDelegate respondsToSelector:@selector(dragScrollView:didTargetToH:reason:)]) {
@@ -3208,8 +3261,8 @@ static void *sf_observe_context = "sf_observe_context";
         [_currentScrollView.delegate scrollViewDidEndDecelerating:_currentScrollView];
     }
     
-    if (_waitMayDecelerate) {
-        _waitMayDecelerate = NO;
+    if (_waitDidTargetTo) {
+        _waitDidTargetTo = NO;
         if (self.dragScrollDelegate &&
             [self.dragScrollDelegate respondsToSelector:@selector(dragScrollView:didTargetToH:reason:)]) {
             [self.dragScrollDelegate dragScrollView:self
@@ -3236,6 +3289,11 @@ static void *sf_observe_context = "sf_observe_context";
 
 - (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView {
     _scrollBeganLoc = @([scrollView.panGestureRecognizer locationInView:scrollView.window]);
+    /*
+     拖拽起始时的展示高度
+     */
+    _dragBeganDH = @(_currDisplayH);
+    _dragDHHasChange = NO;
     
     if (_needsFixDisplayHWhenTouchEnd) {
         //开始响应手势滑动了，自会在滑动结束后重置位置，不需要_dsTapGes的抬起修正了
