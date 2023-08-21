@@ -289,6 +289,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
     NSNumber *_needsDisplayH;   //一些设置displayH的时机View还没有布局，先存下在，布局的时候读取并设置。
     
     BOOL _waitDidTargetTo; //调用了willTargetTo，等待调用DidTargetTo
+    BOOL _ignoreWaitDidTargetTo; //暂时忽视_waitDidTargetTo
     BOOL _waitMayAnimationScroll;
     void (^_animationScrollDidEndBlock)(void);
     
@@ -356,6 +357,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         _caAnimationMaxDur = 0.32;
         _caAnimationUseSpring = YES;
         _waitDidTargetTo = NO;
+        _ignoreWaitDidTargetTo = NO;
         _waitMayAnimationScroll = NO;
         _prefDragCardWhenExpand = NO;
         _autoResetInnerSVOffsetWhenAttachMiss = NO;
@@ -2312,6 +2314,7 @@ static void *sf_observe_context = "sf_observe_context";
                                  animations:^{
                     self.currDisplayH = newdh;
                 } completion:^(BOOL finished) {
+                    
                 }];
             } else {
                 self.currDisplayH = newdh;
@@ -3143,7 +3146,9 @@ static void *sf_observe_context = "sf_observe_context";
     
     NSString *reason = [NSString stringWithFormat:@"willEndDragging%@", willdecelerate ? @"-willdecelerate" : @""];
     //整个drag过程中，displayHeight没发生过变化，则不用触发TargetTo
-    BOOL ignoretargetto = !_dragDHHasChange;
+    
+    //中间没有变化，且结果也不会变化，不需要发target变化的回调
+    BOOL ignoretargetto = !_dragDHHasChange && sf_uifloat_equal(newdh, _dragBeganDH.floatValue);
     //恢复拖拽相关标记位
     _dragBeganDH = nil;
     _dragDHHasChange = NO;
@@ -3174,8 +3179,10 @@ static void *sf_observe_context = "sf_observe_context";
         }
         
         if (BODragScrollDecelerateStyleCAAnimation == anisel) {
-            //先停止惯性
+            //先停止惯性，停止过程不需要调WaitDidTargetTo
+            _ignoreWaitDidTargetTo = YES;
             [scrollView setContentOffset:scrollView.contentOffset animated:NO];
+            _ignoreWaitDidTargetTo = NO;
             
             //使用lite动画
             CGPoint toos = *targetContentOffset;
@@ -3185,7 +3192,7 @@ static void *sf_observe_context = "sf_observe_context";
                 vely = fabs(velocity.y);
             }
             
-            BOOL shouldtargetto = _waitDidTargetTo;
+            BOOL shouldtargetto = _waitDidTargetTo && !_ignoreWaitDidTargetTo;
             _waitDidTargetTo = NO;
             [self __liteAnimateToOffset:toos vel:vely completion:^(BOOL isFinish) {
                 if (shouldtargetto) {
@@ -3212,7 +3219,9 @@ static void *sf_observe_context = "sf_observe_context";
         [self.dragScrollDelegate scrollViewDidEndDragging:scrollView willDecelerate:decelerate];
     }
     
-    if (!decelerate && _waitDidTargetTo) {
+    if (!_ignoreWaitDidTargetTo
+        && !decelerate
+        && _waitDidTargetTo) {
         _waitDidTargetTo = NO;
         //会在稍后停止TrackingRunLoopMode
         if (self.dragScrollDelegate &&
@@ -3261,7 +3270,8 @@ static void *sf_observe_context = "sf_observe_context";
         [_currentScrollView.delegate scrollViewDidEndDecelerating:_currentScrollView];
     }
     
-    if (_waitDidTargetTo) {
+    if (!_ignoreWaitDidTargetTo
+        && _waitDidTargetTo) {
         _waitDidTargetTo = NO;
         if (self.dragScrollDelegate &&
             [self.dragScrollDelegate respondsToSelector:@selector(dragScrollView:didTargetToH:reason:)]) {
