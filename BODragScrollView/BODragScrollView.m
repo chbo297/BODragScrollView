@@ -289,7 +289,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
     NSNumber *_needsDisplayH;   //一些设置displayH的时机View还没有布局，先存下在，布局的时候读取并设置。
     
     BOOL _waitDidTargetTo; //调用了willTargetTo，等待调用DidTargetTo
-    BOOL _ignoreWaitDidTargetTo; //暂时忽视_waitDidTargetTo
+    BOOL _ignoreWaitDidTargetTo; //在内部设置时忽视_waitDidTargetTo
     BOOL _waitMayAnimationScroll;
     void (^_animationScrollDidEndBlock)(void);
     
