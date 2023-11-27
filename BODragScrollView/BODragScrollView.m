@@ -118,12 +118,9 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
 @implementation UIScrollView (bo_dragScroll)
 
 + (void)load {
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        bo_swizzleMethod(self, @selector(isDragging), @selector(bods_isDragging));
-        bo_swizzleMethod(self, @selector(isTracking), @selector(bods_isTracking));
-        bo_swizzleMethod(self, @selector(isDecelerating), @selector(bods_isDecelerating));
-    });
+    bo_swizzleMethod(self, @selector(isDragging), @selector(bods_isDragging));
+    bo_swizzleMethod(self, @selector(isTracking), @selector(bods_isTracking));
+    bo_swizzleMethod(self, @selector(isDecelerating), @selector(bods_isDecelerating));
 }
 
 - (void)setBo_dragScrollView:(BODragScrollView *)bo_dragScrollView {
