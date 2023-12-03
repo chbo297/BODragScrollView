@@ -358,8 +358,9 @@ FOUNDATION_EXTERN NSInteger bo_findIdxInFloatArrayByValue(NSArray<NSNumber *> *a
  以下两个状态用来设置在有手动设置的吸附点时如何选择开始滑动内部scrollView的位置
  默认识别策略：优先全部展示内部ScrollView后再开始找一个最近的吸附点开始滑动内部ScrollView
  */
-@property (nonatomic, assign) BOOL prefDragCardWhenExpand; //default: false 当设置为true时，优先滑动子视图，子视图到底后才滑动其内部的scrollView
+@property (nonatomic, assign) BOOL prefDragCardWhenExpand; //default: false 当设置为true时，优先滑动卡片视图，卡片视图都展开后后才滑动其内部的scrollView
 @property (nonatomic, strong, nullable) NSNumber *prefDragInnerScrollDisplayH; //default: nil 当设置值后，组件优先选择此处开始滑动内部scrollView
+@property (nonatomic, assign) BOOL prefDragInnerScroll; //default: false 当设置为true时，优先滑动当前落指处的内部scrollview开始滑动, 只有false时再设置prefDragCardWhenExpand才有效
 
 /*
  在没有实现代理方法 dragScrollView:recognizeStrategyForGes:otherGes: 时 shouldSimultaneouslyWithOtherGesture属性才会生效，
@@ -387,10 +388,10 @@ FOUNDATION_EXTERN NSInteger bo_findIdxInFloatArrayByValue(NSArray<NSNumber *> *a
 @property (nonatomic, assign) BOOL autoResetInnerSVOffsetWhenAttachMiss;
 
 //设置顶部、底部的bounces行为
-@property (nonatomic, assign) BOOL prefBouncesCardTop; //default: true 子视图向下滑时，若超出bounces、有内部scrollview，是否优先bounces子视图
-@property (nonatomic, assign) BOOL prefBouncesCardBottom; //default: false allowBouncesCardBottom为true时，子视图向上滑，若超出bounces、有内部scrollview，是否优先bounces子视图
-@property (nonatomic, assign) BOOL allowBouncesCardTop; //default: true 是否允许子视图顶部bounces，若为false，prefBouncesCardTop无效
-@property (nonatomic, assign) BOOL allowBouncesCardBottom; //default: true 是否允许子视图底部bounces，若为false，prefBouncesCardBottom无效
+@property (nonatomic, assign) BOOL prefBouncesCardTop; //default: true 手势向下滑时，若超出bounces、有内部scrollview，是否优先bounces卡片视图
+@property (nonatomic, assign) BOOL prefBouncesCardBottom; //default: false allowBouncesCardBottom为true时，手势向上滑，若超出bounces、有内部scrollview，是否优先bounces卡片视图
+@property (nonatomic, assign) BOOL allowBouncesCardTop; //default: true 是否允许卡片视图顶部bounces，若为false，prefBouncesCardTop无效
+@property (nonatomic, assign) BOOL allowBouncesCardBottom; //default: true 是否允许卡片视图底部bounces，若为false，prefBouncesCardBottom无效
 
 //是否正在UIView animate 的block里，当外部接收到displayHDidChange等变化时，若此变化是动画中的block导致的，则此时animationSetting为YES
 @property (nonatomic, readonly) BOOL animationSetting;

@@ -954,6 +954,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
 #endif
     
     CGRect embedf = _embedView.frame;
+    //embedView当前展示顶部距离本容器顶部的距离
     CGFloat embedcurrts = CGRectGetMinY(embedf) - self.contentOffset.y;
     
     CGSize contentsize = self.contentSize;
@@ -1109,12 +1110,13 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         /*
          innerinfoar需要容纳所有吸附点
          其数量：
-         当只有一层，没有多层嵌套(nestSvAr)时，与指定的数量相同即可，若无指定，只有一个吸附点，故最小容量为1
+         当只有一层，没有多层嵌套(nestSvAr)时，与指定的数量相同即可，若无指定，只有一个吸附点，
+         加上有可能为了prefDragInnerScroll属性添加上下区域的临时缓存触发点故最小容量为2
          
          当有多层嵌套(nestSvAr)时，每一层有可能在上一层中间滑动，上半截、中间自己，和下半截最多分成3截，
          所以做大数量是嵌套层级*3
          */
-        NSInteger maxarcount = MAX(scinnerinfoar.count, 1);
+        NSInteger maxarcount = MAX(scinnerinfoar.count, 2);
         if (nestSvAr.count > 0) {
             maxarcount = MAX(maxarcount, nestSvAr.count * 3);
         }
@@ -1124,7 +1126,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         NSInteger innerinfocount = 0;
         
         BOOL specialinnersc = NO;
-        //内部scrollView不再其应该滑动位置，但contentoffset不相符，其应该的滑动位置在当前位置：向下-1  向上1  没有是0，
+        //内部scrollView不再其应该滑动位置，但contentoffset不相符，其应该的滑动位置在当前位置：向下-1  向上1  没有是0，不确定是3
         NSInteger innerscmayinother = 0;
         NSInteger findwhichidx = -1;
         
@@ -1221,6 +1223,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
             
             BOOL innerinfocomplete = NO; //初始化内部scrollView滑动是否完成
             
+            CGFloat curmaydh = (sfh - embedcurrts); //计算完后当前展示高度
             if (scinnerinfoar.count > 0) {
                 //若指定了内部的滑动行为
                 
@@ -1293,7 +1296,6 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                     
                     if (findwhichidx < 0) {
                         CGFloat curinnerosy = innercursc - cinset.top;
-                        CGFloat curmaydh = (sfh - embedcurrts); //计算完后当前展示高度
                         if (infodh + onepxiel >= curmaydh) {
                             findwhichidx = innerdicidx;
                             
@@ -1355,6 +1357,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
             
             //没有指定的行为，启用智能判定
             if (!innerinfocomplete) {
+                // 内部scrollView顶部距离embedView顶部的距离
                 CGFloat dyembedtosc =\
                 [_embedView convertRect:_currentScrollView.frame fromView:_currentScrollView.superview].origin.y;
                 CGFloat curscts = embedcurrts + dyembedtosc;
@@ -1373,101 +1376,193 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                 }
 #endif
                 
+                //是否需要根据scinnerts自动添加单个可滑动内部的位置
+                BOOL needsaddoneinnerscroll = NO;
+                
                 if (self.attachDisplayHAr.count > 0) {
                     //有吸附点
-                    BOOL findbeg = NO; //是否找到开始滑动内部时的位置
                     
-                    CGFloat beginscdh = 0;
-                    CGFloat totalinnerscdh = dyembedtosc + scheight;
-                    NSInteger theidx = bo_findIdxInFloatArrayByValue(self.attachDisplayHAr, totalinnerscdh, NO, YES);
-                    CGFloat maxexp = 0.3; //滑动内部时，内部至少展示70%（视觉友好），这个数值根据需要再调吧
-                    for (NSInteger uidx = theidx; uidx < self.attachDisplayHAr.count; uidx++) {
-                        CGFloat thedh = self.attachDisplayHAr[uidx].floatValue;
-                        BOOL thisfind = NO;
-                        if (thedh >= totalinnerscdh - onepxiel) {
-                            //找到能超过内部scrollview的吸附店
-                            CGFloat exps = thedh - dyembedtosc - sfh;
-                            if (exps <= scheight * maxexp) {
-                                thisfind = YES;
-                                //有一个吸附点可保证内部scrollView至少展示五分之一（根据需要调整吧），可以作为开始内部滑动的点
-                                beginscdh = thedh;
+                    //是否需要使用结合吸附点的指定判定
+                    BOOL needssmartadd = NO;
+                    if (self.prefDragInnerScroll) {
+                        //指定从当前开始滑
+                        NSInteger theidx = bo_findIdxInFloatArrayByValue(self.attachDisplayHAr, curmaydh, NO, NO);
+                        //上面已经判断了self.attachDisplayHAr.count > 0，bo_findIdxInFloatArrayByValue返回的一定是合法值
+                        CGFloat thedh = self.attachDisplayHAr[theidx].floatValue;
+                        //当前面板是否在吸附点上
+                        BOOL currinattach = sf_uifloat_equal(curmaydh, thedh);
+                        if (currinattach) {
+                            //默认当前开始滑即可
+                            needssmartadd = NO;
+                            needsaddoneinnerscroll = YES;
+                        } else {
+                            //不在吸附点，不滑，下一个到达的吸附点再滑
+                            if (innercursc < onepxiel) {
+                                NSInteger nextidx = theidx + 1;
+                                
+                                if (nextidx < self.attachDisplayHAr.count) {
+                                    needssmartadd = NO;
+                                    needsaddoneinnerscroll = YES;
+                                    
+                                    CGFloat nextdh = self.attachDisplayHAr[nextidx].floatValue;
+                                    scinnerts = sfh - nextdh + dyembedtosc;
+                                } else {
+                                    //数值非法, 走智能判定
+                                    needssmartadd = YES;
+                                    needsaddoneinnerscroll = YES;
+                                }
+                                
+                            } else if (innercursc > innertotalsc - onepxiel) {
+                                needssmartadd = NO;
+                                needsaddoneinnerscroll = YES;
+                                
+                                scinnerts = sfh - thedh + dyembedtosc;
+                            } else {
+                                //在中间
+                                
+                                NSInteger nextidx = theidx + 1;
+                                
+                                if (nextidx < self.attachDisplayHAr.count) {
+                                    needssmartadd = NO;
+                                    needsaddoneinnerscroll = NO;
+                                    
+                                    innerscmayinother = 3;
+                                    
+                                    CGFloat firstoffset = thedh - sfh; //开始滑动内部时的offset.y
+                                    firstoffset = MAX(MIN(-embedmints, firstoffset), -embedmaxts);
+                                    BODragScrollAttachInfo scinf =\
+                                    (BODragScrollAttachInfo){-1,
+                                        thedh, firstoffset,
+                                        YES, -cinset.top, -cinset.top + innercursc,
+                                        firstoffset + innercursc};
+                                    innerinfoar[0] = scinf;
+                                    
+                                    CGFloat nextdh = self.attachDisplayHAr[nextidx].floatValue;
+                                    CGFloat nextoffset = firstoffset + innercursc + (nextdh - thedh); //开始滑动内部时的offset.y
+                                    BODragScrollAttachInfo scinf2 =\
+                                    (BODragScrollAttachInfo){-1,
+                                        nextdh, nextoffset,
+                                        YES, -cinset.top + innercursc, -cinset.top + innertotalsc,
+                                        nextoffset + (innertotalsc - innercursc)};
+                                    innerinfoar[1] = scinf2;
+                                    
+                                    innerinfocount = 2;
+                                } else {
+                                    //数值非法, 走智能判定
+                                    needssmartadd = YES;
+                                    needsaddoneinnerscroll = YES;
+                                }
+                            }
+                            
+                        }
+                        
+                    } else {
+                        needssmartadd = YES;
+                        needsaddoneinnerscroll = YES;
+                    }
+                    
+                    if (needssmartadd) {
+                        BOOL findbeg = NO; //是否找到开始滑动内部时的位置
+
+                        CGFloat beginscdh = 0;
+                        CGFloat totalinnerscdh = dyembedtosc + scheight;
+                        NSInteger theidx = bo_findIdxInFloatArrayByValue(self.attachDisplayHAr, totalinnerscdh, NO, YES);
+                        CGFloat maxexp = 0.3; //滑动内部时，内部至少展示70%（视觉友好），这个数值根据需要再调吧
+                        for (NSInteger uidx = theidx; uidx < self.attachDisplayHAr.count; uidx++) {
+                            CGFloat thedh = self.attachDisplayHAr[uidx].floatValue;
+                            BOOL thisfind = NO;
+                            if (thedh >= totalinnerscdh - onepxiel) {
+                                //找到能超过内部scrollview的吸附店
+                                CGFloat exps = thedh - dyembedtosc - sfh;
+                                if (exps <= scheight * maxexp) {
+                                    thisfind = YES;
+                                    //有一个吸附点可保证内部scrollView至少展示五分之一（根据需要调整吧），可以作为开始内部滑动的点
+                                    beginscdh = thedh;
+                                    findbeg = YES;
+                                }
+                            }
+                            
+                            if (thisfind && self.prefDragCardWhenExpand) {
+                                //找到了符合的点，但需要找更远的点优先展开整个卡片，继续循环
+                                continue;
+                            } else {
+                                //该点不符合，后面的也不会符合了，break，
+                                //或者该点符合，但不需要优先展开卡片，使用第一个符合的点即可，break
+                                break;
+                            }
+                        }
+                        
+                        
+                        if (!findbeg) {
+                            NSInteger theminidx = bo_findIdxInFloatArrayByValue(self.attachDisplayHAr, totalinnerscdh, NO, NO);
+                            CGFloat themindh = self.attachDisplayHAr[theminidx].floatValue;
+                            CGFloat minexps = themindh - dyembedtosc - sfh;
+                            if (minexps <= scheight * maxexp) {
+                                beginscdh = themindh;
                                 findbeg = YES;
                             }
                         }
                         
-                        if (thisfind && self.prefDragCardWhenExpand) {
-                            //找到了符合的点，但需要找更远的点优先展开整个卡片，继续循环
-                            continue;
-                        } else {
-                            //该点不符合，后面的也不会符合了，break，
-                            //或者该点符合，但不需要优先展开卡片，使用第一个符合的点即可，break
-                            break;
-                        }
-                    }
-                    
-                    
-                    if (!findbeg) {
-                        NSInteger theminidx = bo_findIdxInFloatArrayByValue(self.attachDisplayHAr, totalinnerscdh, NO, NO);
-                        CGFloat themindh = self.attachDisplayHAr[theminidx].floatValue;
-                        CGFloat minexps = themindh - dyembedtosc - sfh;
-                        if (minexps <= scheight * maxexp) {
-                            beginscdh = themindh;
-                            findbeg = YES;
-                        }
-                    }
-                    
-                    if (findbeg) {
-                        CGFloat shouldscbgts = sfh - beginscdh + dyembedtosc;
-                        if (curscts < (shouldscbgts - onepxiel)) {
-                            if (innercursc < (innertotalsc - onepxiel)) {
-                                innercursc = innertotalsc;
-                                
-                                if (self.autoResetInnerSVOffsetWhenAttachMiss
-                                    || _forceResetInnerScrollOffsetY) {
+                        if (findbeg) {
+                            CGFloat shouldscbgts = sfh - beginscdh + dyembedtosc;
+                            if (curscts < (shouldscbgts - onepxiel)) {
+                                if (innercursc < (innertotalsc - onepxiel)) {
+                                    innercursc = innertotalsc;
                                     
-                                } else {
-                                    innerscmayinother = -1;
+                                    if (self.autoResetInnerSVOffsetWhenAttachMiss
+                                        || _forceResetInnerScrollOffsetY) {
+                                        
+                                    } else {
+                                        innerscmayinother = -1;
+                                    }
                                 }
+                                
+                            } else if (curscts > (shouldscbgts + onepxiel)) {
+                                if (innercursc > onepxiel) {
+                                    innercursc = 0;
+                                    
+                                    if (self.autoResetInnerSVOffsetWhenAttachMiss
+                                        || _forceResetInnerScrollOffsetY) {
+                                        
+                                    } else {
+                                        innerscmayinother = 1;
+                                    }
+                                }
+                                
+                            } else {
+                                specialinnersc = YES;
                             }
                             
-                        } else if (curscts > (shouldscbgts + onepxiel)) {
-                            if (innercursc > onepxiel) {
-                                innercursc = 0;
-                                
-                                if (self.autoResetInnerSVOffsetWhenAttachMiss
-                                    || _forceResetInnerScrollOffsetY) {
-                                    
-                                } else {
-                                    innerscmayinother = 1;
-                                }
-                            }
-                            
-                        } else {
-                            specialinnersc = YES;
+                            scinnerts = shouldscbgts;
                         }
-                        
-                        scinnerts = shouldscbgts;
                     }
                     
                 } else {
                     //没有指定吸附点
-                    //指定优先拖拽整体，再滑动内部
-                    if (self.prefDragCardWhenExpand) {
+                    
+                    if (self.prefDragInnerScroll) {
+                        //默认从当前开始滑动
+                    } else if (self.prefDragCardWhenExpand) {
+                        //指定优先拖拽整体，再滑动内部
                         //等embed滑到最大或者到屏幕顶时开始滑动内部
                         scinnerts = MAX(embedmints + dyembedtosc, 0.f);
                     }
+                    
                 }
                 
-                CGFloat bofis = dyembedtosc - scinnerts; //开始滑动内部时的offset.y
-                bofis = MAX(MIN(-embedmints, bofis), -embedmaxts);
-                BODragScrollAttachInfo scinf =\
-                (BODragScrollAttachInfo){-1,
-                    sfh + bofis, bofis,
-                    YES, -cinset.top, -cinset.top + innertotalsc,
-                    bofis + innertotalsc};
-                //只有一个内部滑动位置
-                innerinfoar[0] = scinf;
-                innerinfocount = 1;
+                if (needsaddoneinnerscroll) {
+                    CGFloat bofis = dyembedtosc - scinnerts; //开始滑动内部时的offset.y
+                    bofis = MAX(MIN(-embedmints, bofis), -embedmaxts);
+                    BODragScrollAttachInfo scinf =\
+                    (BODragScrollAttachInfo){-1,
+                        sfh + bofis, bofis,
+                        YES, -cinset.top, -cinset.top + innertotalsc,
+                        bofis + innertotalsc};
+                    //只有一个内部滑动位置
+                    innerinfoar[0] = scinf;
+                    innerinfocount = 1;
+                }
+                
                 //已经是最后一层了，一定保障innerinfocomplete加载完成，后面没有判断了，不需要再管这个标志位了，若后续还要加逻辑可恢复这行
                 //                innerinfocomplete = YES;
             }
@@ -1735,11 +1830,12 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                 sfoffset.y = embedf.origin.y - embedcurrts;
             }
             
-            if (!specialinnersc
+            if ((0 != innerscmayinother)
                 && !hasbounces
-                && 1 == innerinfocount
-                && (0 != innerscmayinother)
-                && (!_autoResetInnerSVOffsetWhenAttachMiss && !_forceResetInnerScrollOffsetY)) {
+                && !specialinnersc
+                && (_prefDragInnerScroll ||
+                    (!_autoResetInnerSVOffsetWhenAttachMiss
+                     && !_forceResetInnerScrollOffsetY))) {
                 _missAttachAndNeedsReload = innerscmayinother;
             }
             
@@ -2381,9 +2477,10 @@ static void *sf_observe_context = "sf_observe_context";
             embedf.origin.y = 0;
             
         } else if (offsety <= _maxScrollInnerOSy) {
-            //进入了内部滑动范围
+            //进入了有可能内部滑动的范围
             CGFloat cursclength = 0;
             BOOL findtheinfo = NO;
+            BOOL isinnersc = NO;
             for (NSInteger infoidx = 0; infoidx < _innerSVAttInfCount; infoidx++) {
                 BODragScrollAttachInfo innerscinfo = _innerSVAttInfAr[infoidx];
                 UIScrollView *theinfosv = [self __obtainScrollViewWithIdx:innerscinfo.scrollViewIdx];
@@ -2423,6 +2520,8 @@ static void *sf_observe_context = "sf_observe_context";
                         }
                         isinnersc = NO;
                     } else {
+                        //在该滑动内部的区间
+                        isinnersc = YES;
                         cursclength += exty;
                         if (theinfosv == _currentScrollView) {
                             innershouldosy = innerscinfo.innerOffsetA + exty;
@@ -2441,7 +2540,7 @@ static void *sf_observe_context = "sf_observe_context";
             }
             
             if (findtheinfo) {
-                triggerinner = YES;
+                triggerinner = isinnersc;
             } else {
                 innershouldosy = innerminosy;
                 embedf.origin.y = 0;
