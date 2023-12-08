@@ -304,6 +304,13 @@ FOUNDATION_EXTERN NSInteger bo_findIdxInFloatArrayByValue(NSArray<NSNumber *> *a
 
 //设置子视图吸附点（停留位置），每个数字标识内嵌View展示的高度（要求传入的每个数值大于0且从小到大排列）
 @property (nonatomic, strong, nullable) NSArray<NSNumber *> *attachDisplayHAr;
+
+/*
+ 一些情况下比如修改了attach，直接代码执行了滑动，有时希望暂不吸附，有时希望立即吸附
+ 这里提供一个手动执行吸附的方法
+ */
+- (void)takeAttach:(BOOL)animated;
+
 /*
  见该方法的注释：
  - (BODragScrollDecelerateStyle)dragScrollViewDecelerate:(BODragScrollView *)dragScrollView

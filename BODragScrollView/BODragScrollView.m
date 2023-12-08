@@ -1397,29 +1397,29 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                             needsaddoneinnerscroll = YES;
                         } else {
                             //不在吸附点，不滑，下一个到达的吸附点再滑
-                            if (innercursc < onepxiel) {
-                                NSInteger nextidx = theidx + 1;
-                                
-                                if (nextidx < self.attachDisplayHAr.count) {
-                                    needssmartadd = NO;
-                                    needsaddoneinnerscroll = YES;
-                                    
-                                    CGFloat nextdh = self.attachDisplayHAr[nextidx].floatValue;
-                                    scinnerts = sfh - nextdh + dyembedtosc;
-                                } else {
-                                    //数值非法, 走智能判定
-                                    needssmartadd = YES;
-                                    needsaddoneinnerscroll = YES;
-                                }
-                                
-                            } else if (innercursc > innertotalsc - onepxiel) {
-                                needssmartadd = NO;
-                                needsaddoneinnerscroll = YES;
-                                
-                                scinnerts = sfh - thedh + dyembedtosc;
-                            } else {
+//                            if (innercursc < onepxiel) {
+//                                NSInteger nextidx = theidx + 1;
+//                                
+//                                if (nextidx < self.attachDisplayHAr.count) {
+//                                    needssmartadd = NO;
+//                                    needsaddoneinnerscroll = YES;
+//                                    
+//                                    CGFloat nextdh = self.attachDisplayHAr[nextidx].floatValue;
+//                                    scinnerts = sfh - nextdh + dyembedtosc;
+//                                } else {
+//                                    //数值非法, 走智能判定
+//                                    needssmartadd = YES;
+//                                    needsaddoneinnerscroll = YES;
+//                                }
+//                                
+//                            } else if (innercursc > innertotalsc - onepxiel) {
+//                                needssmartadd = NO;
+//                                needsaddoneinnerscroll = YES;
+//                                
+//                                scinnerts = sfh - thedh + dyembedtosc;
+//                            } else {
                                 //在中间
-                                
+                                //在上、在下都认为在中间，然后两边都加滑动内部的区域，待到区域后会重新加载
                                 NSInteger nextidx = theidx + 1;
                                 
                                 if (nextidx < self.attachDisplayHAr.count) {
@@ -1452,7 +1452,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                                     needssmartadd = YES;
                                     needsaddoneinnerscroll = YES;
                                 }
-                            }
+//                            }
                             
                         }
                         
@@ -3730,23 +3730,31 @@ shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)otherGestureRec
     return YES;
 }
 
+/*
+ 一些情况下比如修改了attach，直接代码执行了滑动，有时希望暂不吸附，有时希望立即吸附
+ 这里提供一个手动执行吸附的方法
+ */
+- (void)takeAttach:(BOOL)animated {
+    BODragScrollAttachInfo theinfo;
+    CGPoint of = self.contentOffset;
+    CGPoint inof = of;
+    __unused NSInteger scrolltype =\
+    [self __scrollViewWillEndDragging:self
+                         withVelocity:CGPointZero
+                  targetContentOffset:&inof
+                           attachInfo:&theinfo];
+    if (!sf_uifloat_equal(inof.y, of.y)) {
+        [self scrollToDisplayH:theinfo.displayH animated:animated];
+    }
+}
+
 - (void)onTapGes:(UITapGestureRecognizer *)tapGes {
     if (_needsFixDisplayHWhenTouchEnd &&
         UIGestureRecognizerStateEnded == tapGes.state &&
         !self.isDecelerating) {
         
         //若本次点击导致了动画停止，点击结束后，没有触发scroll的惯性，则需要手动进行一次吸附行为，防止停留位置不对
-        BODragScrollAttachInfo theinfo;
-        CGPoint of = self.contentOffset;
-        CGPoint inof = of;
-        __unused NSInteger scrolltype =\
-        [self __scrollViewWillEndDragging:self
-                             withVelocity:CGPointZero
-                      targetContentOffset:&inof
-                               attachInfo:&theinfo];
-        if (!sf_uifloat_equal(inof.y, of.y)) {
-            [self scrollToDisplayH:theinfo.displayH animated:YES];
-        }
+        [self takeAttach:YES];
     }
 }
 
