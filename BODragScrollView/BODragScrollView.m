@@ -1399,11 +1399,11 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                             //不在吸附点，不滑，下一个到达的吸附点再滑
 //                            if (innercursc < onepxiel) {
 //                                NSInteger nextidx = theidx + 1;
-//                                
+//
 //                                if (nextidx < self.attachDisplayHAr.count) {
 //                                    needssmartadd = NO;
 //                                    needsaddoneinnerscroll = YES;
-//                                    
+//
 //                                    CGFloat nextdh = self.attachDisplayHAr[nextidx].floatValue;
 //                                    scinnerts = sfh - nextdh + dyembedtosc;
 //                                } else {
@@ -1411,11 +1411,11 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
 //                                    needssmartadd = YES;
 //                                    needsaddoneinnerscroll = YES;
 //                                }
-//                                
+//
 //                            } else if (innercursc > innertotalsc - onepxiel) {
 //                                needssmartadd = NO;
 //                                needsaddoneinnerscroll = YES;
-//                                
+//
 //                                scinnerts = sfh - thedh + dyembedtosc;
 //                            } else {
                                 //在中间
@@ -2176,13 +2176,31 @@ static void *sf_observe_context = "sf_observe_context";
                     }
                     
                     if (BODragScrollDecelerateStyleNature == anisel) {
-                        self->_waitMayAnimationScroll = YES;
-                        self->_animationScrollDidEndBlock = ^{
+                        //先清空旧的
+                        if (self->_waitMayAnimationScroll) {
+                            self->_waitMayAnimationScroll = NO;
+                            if (self->_animationScrollDidEndBlock) {
+                                self->_animationScrollDidEndBlock();
+                                self->_animationScrollDidEndBlock = nil;
+                            }
+                        }
+                        if (!CGPointEqualToPoint(self.contentOffset, os)) {
+                            //需要变化，执行切添加回调
+                            [self setContentOffset:os animated:YES];
+                            
+                            self->_waitMayAnimationScroll = YES;
+                            self->_animationScrollDidEndBlock = ^{
+                                if (completion) {
+                                    completion();
+                                }
+                            };
+                        } else {
+                            //不需要变化，直接回调
                             if (completion) {
                                 completion();
                             }
-                        };
-                        [self setContentOffset:os animated:YES];
+                        }
+                        
                     } else {
                         CGFloat vel = 0;
                         NSNumber *velnum = [subInfo objectForKey:@"vel"];
@@ -2348,7 +2366,6 @@ static void *sf_observe_context = "sf_observe_context";
 
 - (void)setInnerScrollViewFirst:(BOOL)innerScrollViewFirst {
     _innerScrollViewFirst = innerScrollViewFirst;
-    super.delaysContentTouches = _innerScrollViewFirst;
 }
 
 #pragma mark - scrollView delegate
@@ -3296,7 +3313,7 @@ static void *sf_observe_context = "sf_observe_context";
                         [self.dragScrollDelegate respondsToSelector:@selector(dragScrollView:didTargetToH:reason:)]) {
                         [self.dragScrollDelegate dragScrollView:self
                                                    didTargetToH:self.currDisplayH
-                                                         reason:@"inset-ani"];
+                                                         reason:@"didEndDragging-inset-ani"];
                     }
                 }
             }];
@@ -3734,7 +3751,7 @@ shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)otherGestureRec
  一些情况下比如修改了attach，直接代码执行了滑动，有时希望暂不吸附，有时希望立即吸附
  这里提供一个手动执行吸附的方法
  */
-- (void)takeAttach:(BOOL)animated {
+- (void)takeAttach:(BOOL)animated subInfo:(NSDictionary *)subInfo {
     BODragScrollAttachInfo theinfo;
     CGPoint of = self.contentOffset;
     CGPoint inof = of;
@@ -3743,6 +3760,7 @@ shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)otherGestureRec
                          withVelocity:CGPointZero
                   targetContentOffset:&inof
                            attachInfo:&theinfo];
+    
     if (!sf_uifloat_equal(inof.y, of.y)) {
         [self scrollToDisplayH:theinfo.displayH animated:animated];
     }
@@ -3754,7 +3772,7 @@ shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)otherGestureRec
         !self.isDecelerating) {
         
         //若本次点击导致了动画停止，点击结束后，没有触发scroll的惯性，则需要手动进行一次吸附行为，防止停留位置不对
-        [self takeAttach:YES];
+        [self takeAttach:YES subInfo:nil];
     }
 }
 
