@@ -300,7 +300,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
     BOOL _needsFixDisplayHWhenTouchEnd;
     //innerscroll已经滑动过了，当前对应的attach点可能在下部-1   可能在上部1。没有时为0
     NSInteger _missAttachAndNeedsReload;
-    BOOL _forceResetInnerScrollOffsetY;
+    BOOL _forceResetInnerScroll;
     NSMutableDictionary *_innerSVBehaviorInfo;
     
     __weak UIControl *_theCtrWhenDecInner; //decelerating时点击了某UIControl，为了不使scrollView的系统机制无效其点击事件，手动传递action
@@ -1507,26 +1507,46 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                             CGFloat shouldscbgts = sfh - beginscdh + dyembedtosc;
                             if (curscts < (shouldscbgts - onepxiel)) {
                                 if (innercursc < (innertotalsc - onepxiel)) {
-                                    innercursc = innertotalsc;
-                                    
-                                    if (self.autoResetInnerSVOffsetWhenAttachMiss
-                                        || _forceResetInnerScrollOffsetY) {
-                                        
+                                    if (_forceResetInnerScroll) {
+                                        if (self.allowInnerSVWhenAttachMiss) {
+                                            //从当前开始滑
+                                            beginscdh = curmaydh;
+                                            shouldscbgts = sfh - beginscdh + dyembedtosc;
+                                        } else {
+                                            innercursc = innertotalsc;
+                                        }
                                     } else {
-                                        innerscmayinother = -1;
+                                        if (self.autoResetInnerSVOffsetWhenAttachMiss) {
+                                            innercursc = innertotalsc;
+                                        } else {
+                                            //innerscmayinother时 innercursc虽然设置但不会被实际改变，只会用作计算整体的offset
+                                            innercursc = innertotalsc;
+                                            innerscmayinother = -1;
+                                        }
                                     }
+                                    
                                 }
                                 
                             } else if (curscts > (shouldscbgts + onepxiel)) {
                                 if (innercursc > onepxiel) {
-                                    innercursc = 0;
-                                    
-                                    if (self.autoResetInnerSVOffsetWhenAttachMiss
-                                        || _forceResetInnerScrollOffsetY) {
-                                        
+                                    if (_forceResetInnerScroll) {
+                                        if (self.allowInnerSVWhenAttachMiss) {
+                                            //从当前开始滑
+                                            beginscdh = curmaydh;
+                                            shouldscbgts = sfh - beginscdh + dyembedtosc;
+                                        } else {
+                                            innercursc = 0;
+                                        }
                                     } else {
-                                        innerscmayinother = 1;
+                                        if (self.autoResetInnerSVOffsetWhenAttachMiss) {
+                                            innercursc = 0;
+                                        } else {
+                                            //innerscmayinother时 innercursc虽然设置但不会被实际改变，只会用作计算整体的offset
+                                            innercursc = 0;
+                                            innerscmayinother = 1;
+                                        }
                                     }
+                                    
                                 }
                                 
                             } else {
@@ -1835,7 +1855,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                 && !specialinnersc
                 && (_prefDragInnerScroll ||
                     (!_autoResetInnerSVOffsetWhenAttachMiss
-                     && !_forceResetInnerScrollOffsetY))) {
+                     && !_forceResetInnerScroll))) {
                 _missAttachAndNeedsReload = innerscmayinother;
             }
             
@@ -2699,9 +2719,9 @@ static void *sf_observe_context = "sf_observe_context";
                 || (_missAttachAndNeedsReload < 0
                     && ((curry + onepxiel) < beganlocy))) {
                 _missAttachAndNeedsReload = 0;
-                _forceResetInnerScrollOffsetY = YES;
+                _forceResetInnerScroll = YES;
                 [self __setupCurrentScrollView:_currentScrollView];
-                _forceResetInnerScrollOffsetY = NO;
+                _forceResetInnerScroll = NO;
             }
         }
     }

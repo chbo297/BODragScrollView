@@ -308,8 +308,10 @@ FOUNDATION_EXTERN NSInteger bo_findIdxInFloatArrayByValue(NSArray<NSNumber *> *a
 /*
  一些情况下比如修改了attach，直接代码执行了滑动，有时希望暂不吸附，有时希望立即吸附
  这里提供一个手动执行吸附的方法
+ subInfo:
+ enable_height0:  YES/NO  YES时，若attach的是0也允许直接收起,否则若当前是有展示高度,即使较小，也不会吸附到0，至少也是有值的一个高度
  */
-- (void)takeAttach:(BOOL)animated;
+- (void)takeAttach:(BOOL)animated subInfo:(nullable NSDictionary *)subInfo;
 
 /*
  见该方法的注释：
@@ -370,6 +372,21 @@ FOUNDATION_EXTERN NSInteger bo_findIdxInFloatArrayByValue(NSArray<NSNumber *> *a
 @property (nonatomic, assign) BOOL prefDragInnerScroll; //default: false 当设置为true时，优先滑动当前落指处的内部scrollview开始滑动, 只有false时再设置prefDragCardWhenExpand才有效
 
 /*
+ 比如用户把内部scrollView滑动一半儿，又拖拽面板到了其它位置，又开始滑内部SV，内部sv的状态与面板指定的高度对应滑动区域不符,
+ 此时是否自动将内部SV置到顶或者底。default: false
+ YES: 自动将内部SV置到顶或者底
+ NO: 不修改内部SV滑动位置，允许从当前落指位置开始滑动内部,
+ */
+@property (nonatomic, assign) BOOL autoResetInnerSVOffsetWhenAttachMiss;
+/*
+ 当autoResetInnerSVOffsetWhenAttachMiss为NO时，
+ 是否允许从当前位置滑动内部。default: false
+ YES: 允许从当前位置滑动内部，即使之前没有指定该位置可以滑动内部当前对应的区域
+ NO: 滑动外部，直至到了合法范围
+ */
+@property (nonatomic, assign) BOOL allowInnerSVWhenAttachMiss;
+
+/*
  在没有实现代理方法 dragScrollView:recognizeStrategyForGes:otherGes: 时 shouldSimultaneouslyWithOtherGesture属性才会生效，
  系统的scrollView默认是不与其它View的Gesture共存的，会有冲突导致二者有一个失效
  是否与其它View(非scrollView)的ges共存，
@@ -386,13 +403,6 @@ FOUNDATION_EXTERN NSInteger bo_findIdxInFloatArrayByValue(NSArray<NSNumber *> *a
  default:YES
  */
 @property (nonatomic, assign) BOOL shouldFailureOtherTapGestureWhenDecelerating;
-
-/*
- 比如用户把内部scrollView滑动一半儿，又拖拽面板到了其它位置，又开始滑内部SV，此时是否自动将内部SV置到顶或者底。default: false
- YES: 自动将内部SV置到顶或者底
- NO: 不修改内部SV滑动位置，允许从当前落指位置开始滑动内部,
- */
-@property (nonatomic, assign) BOOL autoResetInnerSVOffsetWhenAttachMiss;
 
 //设置顶部、底部的bounces行为
 @property (nonatomic, assign) BOOL prefBouncesCardTop; //default: true 手势向下滑时，若超出bounces、有内部scrollview，是否优先bounces卡片视图
