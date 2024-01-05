@@ -113,9 +113,43 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
 @property (nonatomic, readonly) BOOL bods_isTracking;
 @property (nonatomic, readonly) BOOL bods_isDecelerating;
 
+@property (nonatomic, readwrite) CGPoint bo_contentOffset;
+@property (nonatomic, readwrite) CGSize bo_contentSize;
+@property (nonatomic, readwrite) UIEdgeInsets bo_contentInset;
+
 @end
 
 @implementation UIScrollView (bo_dragScroll)
+
+- (CGPoint)bo_contentOffset {
+    return self.contentOffset;
+}
+
+- (void)setBo_contentOffset:(CGPoint)bo_contentOffset {
+    if (!CGPointEqualToPoint(self.contentOffset, bo_contentOffset)) {
+        self.contentOffset = bo_contentOffset;
+    }
+}
+
+- (CGSize)bo_contentSize {
+    return self.contentSize;
+}
+
+- (void)setBo_contentSize:(CGSize)bo_contentSize {
+    if (!CGSizeEqualToSize(self.contentSize, bo_contentSize)) {
+        self.contentSize = bo_contentSize;
+    }
+}
+
+- (UIEdgeInsets)bo_contentInset {
+    return self.contentInset;
+}
+
+- (void)setBo_contentInset:(UIEdgeInsets)bo_contentInset {
+    if (!UIEdgeInsetsEqualToEdgeInsets(self.contentInset, bo_contentInset)) {
+        self.contentInset = bo_contentInset;
+    }
+}
 
 + (void)load {
     bo_swizzleMethod(self, @selector(isDragging), @selector(bods_isDragging));
@@ -638,6 +672,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
     }
     
     [self trySetupCurrentScrollViewWithContentView:view];
+    
     return [super touchesShouldBegin:touches withEvent:event inContentView:view];
 }
 
@@ -886,9 +921,9 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         }
         
         [self innerSetting:^{
-            self.contentInset = inset;
-            self.contentOffset = CGPointMake(0, -(selfh - displayh));
-            self.contentSize = CGSizeMake(sfw, cardsize.height);
+            self.bo_contentInset = inset;
+            self.bo_contentOffset = CGPointMake(0, -(selfh - displayh));
+            self.bo_contentSize = CGSizeMake(sfw, cardsize.height);
             [self setEmbedViewFrame:embedrect];
         }];
         
@@ -927,7 +962,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         return;
     }
     if (!CGPointEqualToPoint(_currentScrollView.contentOffset, offset)) {
-        _currentScrollView.contentOffset = offset;
+        _currentScrollView.bo_contentOffset = offset;
         _lastSetInnerOSy = offset;
     }
 }
@@ -1027,7 +1062,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
     
     contentsize.height = CGRectGetHeight(embedf);
     [self innerSetting:^{
-        self.contentSize = contentsize;
+        self.bo_contentSize = contentsize;
     }];
     embedf.origin.y = 0;
     sfoffset.y = -embedcurrts;
@@ -1049,6 +1084,11 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                 [self __addObserveForSc:_currentScrollView];
                 self.currentScrollViewHasObserver = YES;
             }
+        }
+        
+        if (self.innerScrollViewFirst) {
+            //内部优先，这里只捕获，但不做逻辑处理，后面会让外层scrollview失效，只滑内部即可
+            return;
         }
         
         //夹在_currentScrollView和embedView层级中间的嵌套scrollView
@@ -1872,9 +1912,9 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
     }
     
     [self innerSetting:^{
-        self.contentSize = contentsize;
+        self.bo_contentSize = contentsize;
         [self setEmbedViewFrame:embedf];
-        self.contentOffset = sfoffset;
+        self.bo_contentOffset = sfoffset;
         
         if (needssetinneroffset
             && 0 == self->_missAttachAndNeedsReload) {
@@ -2117,7 +2157,6 @@ static void *sf_observe_context = "sf_observe_context";
                    animated:(BOOL)animated
                     subInfo:(NSDictionary *)subInfo
                  completion:(void (^ __nullable)(void))completion {
-    
     if (_currentScrollView) {
         NSValue *offsetval = [self __checkInnerOSForDH:displayH];
         
@@ -2362,9 +2401,9 @@ static void *sf_observe_context = "sf_observe_context";
         [self innerSetting:^{
             CGPoint oos = self.contentOffset;
             //setContentInset时系统会自己执行checkcontentOffset行为修改了offset，
-            self.contentInset = inset;
+            self.bo_contentInset = inset;
             //恢复原先offset
-            self.contentOffset = oos;
+            self.bo_contentOffset = oos;
         }];
     }
 }
@@ -2421,7 +2460,7 @@ static void *sf_observe_context = "sf_observe_context";
                                  | UIViewAnimationOptionLayoutSubviews)
                      animations:^{
         self.isScrollAnimating = YES;
-        self.contentOffset = offset;
+        self.bo_contentOffset = offset;
     } completion:^(BOOL finished) {
         self.isScrollAnimating = NO;
         if (completion) {
@@ -2503,7 +2542,7 @@ static void *sf_observe_context = "sf_observe_context";
                     embedf.origin.y = 0;
                     innershouldosy = innerminosy;
                     [self innerSetting:^{
-                        self.contentOffset = co;
+                        self.bo_contentOffset = co;
                     }];
                     isinnersc = NO;
                 }
@@ -2517,7 +2556,6 @@ static void *sf_observe_context = "sf_observe_context";
             //进入了有可能内部滑动的范围
             CGFloat cursclength = 0;
             BOOL findtheinfo = NO;
-            BOOL isinnersc = NO;
             for (NSInteger infoidx = 0; infoidx < _innerSVAttInfCount; infoidx++) {
                 BODragScrollAttachInfo innerscinfo = _innerSVAttInfAr[infoidx];
                 UIScrollView *theinfosv = [self __obtainScrollViewWithIdx:innerscinfo.scrollViewIdx];
@@ -2534,7 +2572,7 @@ static void *sf_observe_context = "sf_observe_context";
                             } else {
                                 CGPoint theos = theinfosv.contentOffset;
                                 theos.y = innerscinfo.innerOffsetB;
-                                theinfosv.contentOffset = theos;
+                                theinfosv.bo_contentOffset = theos;
                             }
                             cursclength += infomaxsc;
                             continue;
@@ -2553,7 +2591,7 @@ static void *sf_observe_context = "sf_observe_context";
                         } else {
                             CGPoint theos = theinfosv.contentOffset;
                             theos.y = innerscinfo.innerOffsetB;
-                            theinfosv.contentOffset = theos;
+                            theinfosv.bo_contentOffset = theos;
                         }
                         isinnersc = NO;
                     } else {
@@ -2565,7 +2603,7 @@ static void *sf_observe_context = "sf_observe_context";
                         } else {
                             CGPoint theos = theinfosv.contentOffset;
                             theos.y = innerscinfo.innerOffsetA + exty;
-                            theinfosv.contentOffset = theos;
+                            theinfosv.bo_contentOffset = theos;
                         }
                         //exty是0的话，标识已经到外部了
                         isinnersc = (exty > 0);
@@ -2616,7 +2654,7 @@ static void *sf_observe_context = "sf_observe_context";
                     embedf.origin.y = innertotalsc;
                     innershouldosy = innermaxosy;
                     [self innerSetting:^{
-                        self.contentOffset = co;
+                        self.bo_contentOffset = co;
                     }];
                     isinnersc = NO;
                 }
