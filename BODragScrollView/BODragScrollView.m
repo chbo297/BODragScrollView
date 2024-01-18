@@ -1085,11 +1085,11 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                 self.currentScrollViewHasObserver = YES;
             }
         }
-        
-        if (self.innerScrollViewFirst) {
-            //内部优先，这里只捕获，但不做逻辑处理，后面会让外层scrollview失效，只滑内部即可
-            return;
-        }
+    }
+    
+    if (nil != currentScrollView
+        && !self.innerScrollViewFirst) {
+        //处理新捕获的scrollview
         
         //夹在_currentScrollView和embedView层级中间的嵌套scrollView
         NSMutableArray<UIScrollView *> *nestSvAr =\
@@ -1506,38 +1506,45 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
 
                         CGFloat beginscdh = 0;
                         CGFloat totalinnerscdh = dyembedtosc + scheight;
-                        NSInteger theidx = bo_findIdxInFloatArrayByValue(self.attachDisplayHAr, totalinnerscdh, NO, YES);
-                        CGFloat maxexp = 0.3; //滑动内部时，内部至少展示70%（视觉友好），这个数值根据需要再调吧
+                        NSInteger theidx = bo_findIdxInFloatArrayByValue(self.attachDisplayHAr, curmaydh, NO, YES);
+                        CGFloat minshowrate = 0.7; //滑动内部时，内部至少展示70%（视觉友好），这个数值根据需要再调吧
                         for (NSInteger uidx = theidx; uidx < self.attachDisplayHAr.count; uidx++) {
                             CGFloat thedh = self.attachDisplayHAr[uidx].floatValue;
                             BOOL thisfind = NO;
-                            if (thedh >= totalinnerscdh - onepxiel) {
-                                //找到能超过内部scrollview的吸附店
-                                CGFloat exps = thedh - dyembedtosc - sfh;
-                                if (exps <= scheight * maxexp) {
-                                    thisfind = YES;
-                                    //有一个吸附点可保证内部scrollView至少展示五分之一（根据需要调整吧），可以作为开始内部滑动的点
-                                    beginscdh = thedh;
-                                    findbeg = YES;
-                                }
+                            //找到能超过内部scrollview的吸附店
+                            CGFloat innerscshowheight = thedh - dyembedtosc;
+                            if (innerscshowheight > 0
+                                && scheight > 0
+                                && (innerscshowheight / scheight) >= minshowrate) {
+                                thisfind = YES;
+                                //有一个吸附点可保证内部scrollView至少展示五分之一（根据需要调整吧），可以作为开始内部滑动的点
+                                beginscdh = thedh;
+                                findbeg = YES;
                             }
                             
-                            if (thisfind && self.prefDragCardWhenExpand) {
-                                //找到了符合的点，但需要找更远的点优先展开整个卡片，继续循环
-                                continue;
-                            } else {
-                                //该点不符合，后面的也不会符合了，break，
-                                //或者该点符合，但不需要优先展开卡片，使用第一个符合的点即可，break
-                                break;
+                            if (thisfind) {
+                                if (self.prefDragCardWhenExpand) {
+                                    if (innerscshowheight < scheight - onepxiel) {
+                                        //没展示完全
+                                        continue;
+                                    } else {
+                                        //展示完全了
+                                        break;
+                                    }
+                                } else {
+                                    //找到一个就好
+                                    break;
+                                }
                             }
                         }
                         
                         
-                        if (!findbeg) {
+                        if (!findbeg
+                            && scheight > 0) {
                             NSInteger theminidx = bo_findIdxInFloatArrayByValue(self.attachDisplayHAr, totalinnerscdh, NO, NO);
                             CGFloat themindh = self.attachDisplayHAr[theminidx].floatValue;
-                            CGFloat minexps = themindh - dyembedtosc - sfh;
-                            if (minexps <= scheight * maxexp) {
+                            CGFloat showheighrate = (themindh - dyembedtosc) / scheight;
+                            if (showheighrate >= minshowrate) {
                                 beginscdh = themindh;
                                 findbeg = YES;
                             }
@@ -1581,9 +1588,16 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                                         if (self.autoResetInnerSVOffsetWhenAttachMiss) {
                                             innercursc = 0;
                                         } else {
-                                            //innerscmayinother时 innercursc虽然设置但不会被实际改变，只会用作计算整体的offset
-                                            innercursc = 0;
-                                            innerscmayinother = 1;
+                                            if (self.allowInnerSVWhenAttachMiss) {
+                                                //从当前开始滑
+                                                beginscdh = curmaydh;
+                                                shouldscbgts = sfh - beginscdh + dyembedtosc;
+                                            } else {
+                                                //innerscmayinother时 innercursc虽然设置但不会被实际改变，只会用作计算整体的offset
+                                                innercursc = 0;
+                                                innerscmayinother = 1;
+                                            }
+                                            
                                         }
                                     }
                                     
