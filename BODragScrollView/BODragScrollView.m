@@ -334,7 +334,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
     BOOL _needsFixDisplayHWhenTouchEnd;
     //innerscroll已经滑动过了，当前对应的attach点可能在下部-1   可能在上部1。没有时为0
     NSInteger _missAttachAndNeedsReload;
-    BOOL _forceResetInnerScroll;
+    BOOL _forceResetWhenScroll;
     NSMutableDictionary *_innerSVBehaviorInfo;
     
     __weak UIControl *_theCtrWhenDecInner; //decelerating时点击了某UIControl，为了不使scrollView的系统机制无效其点击事件，手动传递action
@@ -979,6 +979,15 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
 }
 
 - (void)__setupCurrentScrollView:(UIScrollView *)currentScrollView {
+    [self __setupCurrentScrollView:currentScrollView type:0];
+}
+
+/*
+ type:0 普通设置
+ type: 1 内部scrollview的observer的设置，这种情况下不要bounce外部
+ */
+- (void)__setupCurrentScrollView:(UIScrollView *)currentScrollView
+                            type:(NSInteger)setType {
 #if DEBUG
     NSAssert(_embedView != nil, @"embedview should not be nil");
     if (![NSThread isMainThread]) {
@@ -1186,78 +1195,80 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
             CGFloat bottombounces = 0;
             
             //计算innercursc  embedcurrts  topbounces  bottombounces
-            if (m_topext > 0 || m_topextinner > 0) {
-                //内部或者外部卡片的top bounces了
-                BOOL bouncescard = (self.allowBouncesCardTop &&
-                                    (self.prefBouncesCardTop || !_currentScrollView.bounces));
-                if (bouncescard) {
-                    //优先bounces 卡片
-                    if (m_topext > 0) {
-                        //外部拉力转移到内部
-                        innercursc -= m_topext;
-                        embedcurrts = embedmaxts;
+            if (0 == setType) {
+                if (m_topext > 0 || m_topextinner > 0) {
+                    //内部或者外部卡片的top bounces了
+                    BOOL bouncescard = (self.allowBouncesCardTop &&
+                                        (self.prefBouncesCardTop || !_currentScrollView.bounces));
+                    if (bouncescard) {
+                        //优先bounces 卡片
+                        if (m_topext > 0) {
+                            //外部拉力转移到内部
+                            innercursc -= m_topext;
+                            embedcurrts = embedmaxts;
+                        }
+                        
+                        //若内部无法中和拉力，剩余的拉力转移到外部
+                        if (m_topextinner > 0) {
+                            embedcurrts += m_topextinner;
+                            innercursc = 0;
+                        }
+                        
+                        topbounces = MAX(m_topext, 0);
+                    } else {
+                        //优先bounces内部
+                        if (m_topextinner > 0) {
+                            //内部拉力转移到外部
+                            embedcurrts += m_topextinner;
+                            innercursc = 0;
+                        }
+                        
+                        //若外部无法中和拉力，剩余的拉力转移到内部
+                        if (m_topext > 0) {
+                            innercursc -= m_topext;
+                            embedcurrts = embedmaxts;
+                        }
+                        topbounces = MAX(m_topextinner, 0);
                     }
-                    
-                    //若内部无法中和拉力，剩余的拉力转移到外部
-                    if (m_topextinner > 0) {
-                        embedcurrts += m_topextinner;
-                        innercursc = 0;
-                    }
-                    
-                    topbounces = MAX(m_topext, 0);
-                } else {
-                    //优先bounces内部
-                    if (m_topextinner > 0) {
-                        //内部拉力转移到外部
-                        embedcurrts += m_topextinner;
-                        innercursc = 0;
-                    }
-                    
-                    //若外部无法中和拉力，剩余的拉力转移到内部
-                    if (m_topext > 0) {
-                        innercursc -= m_topext;
-                        embedcurrts = embedmaxts;
-                    }
-                    topbounces = MAX(m_topextinner, 0);
                 }
-            }
-            
-            if (m_bottomext > 0 || m_bottomextinner > 0) {
-                //内部或者外部卡片的bottom bounces了
-                BOOL bouncescard = (self.allowBouncesCardBottom &&
-                                    (self.prefBouncesCardBottom || !_currentScrollView.bounces));
-                if (bouncescard) {
-                    //优先bounces外部
-                    
-                    if (m_bottomext > 0) {
-                        //外部bounces转移到内部
-                        innercursc += m_bottomext;
-                        embedcurrts = embedmints;
+                
+                if (m_bottomext > 0 || m_bottomextinner > 0) {
+                    //内部或者外部卡片的bottom bounces了
+                    BOOL bouncescard = (self.allowBouncesCardBottom &&
+                                        (self.prefBouncesCardBottom || !_currentScrollView.bounces));
+                    if (bouncescard) {
+                        //优先bounces外部
+                        
+                        if (m_bottomext > 0) {
+                            //外部bounces转移到内部
+                            innercursc += m_bottomext;
+                            embedcurrts = embedmints;
+                        }
+                        
+                        //若内部无法中和拉力，剩余的拉力转移到外部
+                        if (m_bottomextinner > 0) {
+                            embedcurrts -= m_bottomextinner;
+                            innercursc = innertotalsc;
+                        }
+                        
+                        bottombounces = MAX(m_bottomext, 0);
+                    } else {
+                        //优先bounces内部
+                        if (m_bottomextinner > 0) {
+                            //内部bounces转移到外部
+                            embedcurrts -= m_bottomextinner;
+                            innercursc = innertotalsc;
+                        }
+                        
+                        //若外部无法中和拉力，剩余的拉力转移到内部
+                        if (m_bottomext > 0) {
+                            //外部bounces转移到内部
+                            innercursc += m_bottomext;
+                            embedcurrts = embedmints;
+                        }
+                        
+                        bottombounces = MAX(m_bottomextinner, 0);
                     }
-                    
-                    //若内部无法中和拉力，剩余的拉力转移到外部
-                    if (m_bottomextinner > 0) {
-                        embedcurrts -= m_bottomextinner;
-                        innercursc = innertotalsc;
-                    }
-                    
-                    bottombounces = MAX(m_bottomext, 0);
-                } else {
-                    //优先bounces内部
-                    if (m_bottomextinner > 0) {
-                        //内部bounces转移到外部
-                        embedcurrts -= m_bottomextinner;
-                        innercursc = innertotalsc;
-                    }
-                    
-                    //若外部无法中和拉力，剩余的拉力转移到内部
-                    if (m_bottomext > 0) {
-                        //外部bounces转移到内部
-                        innercursc += m_bottomext;
-                        embedcurrts = embedmints;
-                    }
-                    
-                    bottombounces = MAX(m_bottomextinner, 0);
                 }
             }
             
@@ -1405,16 +1416,16 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                 //开始滑动内部时，内部scrollView.top距离DragScrollView可展示局域顶部的距离
                 CGFloat scinnerts = curscts;
                 
-#if DEBUG
-                CGFloat scmints = embedmints + dyembedtosc;
-                //内部bounces时，外部位置需要在最上/下（之上的逻辑需要处理完这种情况）
-                if (innercursc < 0) {
-                    CGFloat scmaxts = embedmaxts + dyembedtosc;
-                    NSAssert(sf_uifloat_equal(curscts, scmaxts), @"innercursc < 0, curscts == scmaxts");
-                } else if (innercursc > innertotalsc) {
-                    NSAssert(sf_uifloat_equal(curscts, scmints), @"innercursc < 0, curscts(%@) == scmints(%@)", @(curscts), @(scmints));
-                }
-#endif
+//#if DEBUG
+//                CGFloat scmints = embedmints + dyembedtosc;
+//                //内部bounces时，外部位置需要在最上/下（之上的逻辑需要处理完这种情况）
+//                if (innercursc < 0) {
+//                    CGFloat scmaxts = embedmaxts + dyembedtosc;
+//                    NSAssert(sf_uifloat_equal(curscts, scmaxts), @"innercursc < 0, curscts == scmaxts");
+//                } else if (innercursc > innertotalsc) {
+//                    NSAssert(sf_uifloat_equal(curscts, scmints), @"innercursc < 0, curscts(%@) == scmints(%@)", @(curscts), @(scmints));
+//                }
+//#endif
                 
                 //是否需要根据scinnerts自动添加单个可滑动内部的位置
                 BOOL needsaddoneinnerscroll = NO;
@@ -1528,6 +1539,15 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                                         //没展示完全
                                         continue;
                                     } else {
+                                        if (uidx < self.attachDisplayHAr.count - 1) {
+                                            //还有下一个
+                                            CGFloat nextdh = self.attachDisplayHAr[uidx + 1].floatValue;
+                                            CGFloat nextinnerscshowheight = nextdh - dyembedtosc;
+                                            if (nextinnerscshowheight - thedh <= 0) {
+                                                //下一个吸附点依然没有让内部区域超出
+                                                continue;
+                                            }
+                                        }
                                         //展示完全了
                                         break;
                                     }
@@ -1554,8 +1574,9 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                             CGFloat shouldscbgts = sfh - beginscdh + dyembedtosc;
                             if (curscts < (shouldscbgts - onepxiel)) {
                                 if (innercursc < (innertotalsc - onepxiel)) {
-                                    if (_forceResetInnerScroll) {
-                                        if (self.allowInnerSVWhenAttachMiss) {
+                                    if (_forceResetWhenScroll) {
+                                        if (self.allowInnerSVWhenAttachMiss
+                                            || self.prefDragCardWhenExpand) {
                                             //从当前开始滑
                                             beginscdh = curmaydh;
                                             shouldscbgts = sfh - beginscdh + dyembedtosc;
@@ -1576,8 +1597,9 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                                 
                             } else if (curscts > (shouldscbgts + onepxiel)) {
                                 if (innercursc > onepxiel) {
-                                    if (_forceResetInnerScroll) {
-                                        if (self.allowInnerSVWhenAttachMiss) {
+                                    if (_forceResetWhenScroll) {
+                                        if (self.allowInnerSVWhenAttachMiss
+                                            || self.prefDragCardWhenExpand) {
                                             //从当前开始滑
                                             beginscdh = curmaydh;
                                             shouldscbgts = sfh - beginscdh + dyembedtosc;
@@ -1588,14 +1610,19 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                                         if (self.autoResetInnerSVOffsetWhenAttachMiss) {
                                             innercursc = 0;
                                         } else {
-                                            if (self.allowInnerSVWhenAttachMiss) {
-                                                //从当前开始滑
-                                                beginscdh = curmaydh;
-                                                shouldscbgts = sfh - beginscdh + dyembedtosc;
-                                            } else {
-                                                //innerscmayinother时 innercursc虽然设置但不会被实际改变，只会用作计算整体的offset
+                                            if (self.prefDragCardWhenExpand) {
                                                 innercursc = 0;
                                                 innerscmayinother = 1;
+                                            } else {
+                                                if (self.allowInnerSVWhenAttachMiss) {
+                                                    //从当前开始滑
+                                                    beginscdh = curmaydh;
+                                                    shouldscbgts = sfh - beginscdh + dyembedtosc;
+                                                } else {
+                                                    //innerscmayinother时 innercursc虽然设置但不会被实际改变，只会用作计算整体的offset
+                                                    innercursc = 0;
+                                                    innerscmayinother = 1;
+                                                }
                                             }
                                             
                                         }
@@ -1909,7 +1936,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                 && !specialinnersc
                 && (_prefDragInnerScroll ||
                     (!_autoResetInnerSVOffsetWhenAttachMiss
-                     && !_forceResetInnerScroll))) {
+                     && !_forceResetWhenScroll))) {
                 _missAttachAndNeedsReload = innerscmayinother;
             }
             
@@ -2026,13 +2053,13 @@ static void *sf_observe_context = "sf_observe_context";
             //检测到其状态变化，重新加载
             BOOL osychange =\
             !sf_uifloat_equal(_lastSetInnerOSy.y, _currentScrollView.contentOffset.y);
-            [self __setupCurrentScrollView:_currentScrollView];
+            [self __setupCurrentScrollView:_currentScrollView type:1];
             
             if (!self.bods_isTracking &&
                 self.bods_isDecelerating &&
                 osychange) {
                 //如果重置时发现业务方修改了内部的offset
-                [self __setupCurrentScrollView:nil];
+                [self __setupCurrentScrollView:nil type:1];
                 [self setContentOffset:self.contentOffset animated:NO];
             }
         }
@@ -2610,7 +2637,6 @@ static void *sf_observe_context = "sf_observe_context";
                         isinnersc = NO;
                     } else {
                         //在该滑动内部的区间
-                        isinnersc = YES;
                         cursclength += exty;
                         if (theinfosv == _currentScrollView) {
                             innershouldosy = innerscinfo.innerOffsetA + exty;
@@ -2667,12 +2693,17 @@ static void *sf_observe_context = "sf_observe_context";
                     co.y = maxosy;
                     embedf.origin.y = innertotalsc;
                     innershouldosy = innermaxosy;
+                    isinnersc = NO;
+                    
                     [self innerSetting:^{
                         self.bo_contentOffset = co;
                     }];
-                    isinnersc = NO;
                 }
             }
+        }
+        
+        if ([self tryReloadWhenScrollForMissAttach:triggerinner]) {
+            return;
         }
         
         CGPoint inneroffset = _currentScrollView.contentOffset;
@@ -2685,6 +2716,11 @@ static void *sf_observe_context = "sf_observe_context";
             }
         }];
     } else {
+        
+        if ([self tryReloadWhenScrollForMissAttach:triggerinner]) {
+            return;
+        }
+        
         CGFloat coy = self.contentOffset.y;
         CGFloat minosy = -self.contentInset.top;
         CGFloat maxosy =\
@@ -2749,34 +2785,58 @@ static void *sf_observe_context = "sf_observe_context";
                                       didScroll:newdh
                                         isInner:isinnersc];
     }
-    
+}
+
+- (BOOL)tryReloadWhenScrollForMissAttach:(BOOL)currTriggerInner {
     if (0 != _missAttachAndNeedsReload
         && _currentScrollView) {
-        if (triggerinner) {
+        if (currTriggerInner) {
             //到达内部点，重置位置
             _missAttachAndNeedsReload = 0;
             [self __setupCurrentScrollView:_currentScrollView];
+            return YES;
         } else if (nil != _scrollBeganLoc) {
-            CGFloat beganlocy = _scrollBeganLoc.CGPointValue.y;
-            CGFloat curry = [scrollView.panGestureRecognizer locationInView:scrollView.window].y;
-            
+            CGFloat vely = [self.panGestureRecognizer velocityInView:self.window].y;
             /*
              非内部点，根据手指方向，决定是继续滑动还是重置内部
              点在上面，但向下滑了，此时reset点
              点在下面，但向上滑了，此时reset点
              */
-            CGFloat onepxiel = sf_getOnePxiel();
             if ((_missAttachAndNeedsReload > 0
-                 && (curry > (beganlocy + onepxiel)))
+                 && vely > 0)
                 || (_missAttachAndNeedsReload < 0
-                    && ((curry + onepxiel) < beganlocy))) {
+                    && vely < 0)) {
                 _missAttachAndNeedsReload = 0;
-                _forceResetInnerScroll = YES;
+                _forceResetWhenScroll = YES;
                 [self __setupCurrentScrollView:_currentScrollView];
-                _forceResetInnerScroll = NO;
+                _forceResetWhenScroll = NO;
+                return YES;
             }
         }
     }
+    return NO;
+}
+
+- (BOOL)tryReloadWhenPanBegan {
+    if (nil != _scrollBeganLoc) {
+        CGFloat vely = [self.panGestureRecognizer velocityInView:self.window].y;
+        /*
+         非内部点，根据手指方向，决定是继续滑动还是重置内部
+         点在上面，但向下滑了，此时reset点
+         点在下面，但向上滑了，此时reset点
+         */
+        if ((_missAttachAndNeedsReload > 0
+             && vely > 0)
+            || (_missAttachAndNeedsReload < 0
+                && vely < 0)) {
+            _missAttachAndNeedsReload = 0;
+            _forceResetWhenScroll = YES;
+            [self __setupCurrentScrollView:_currentScrollView];
+            _forceResetWhenScroll = NO;
+            return YES;
+        }
+    }
+    return NO;
 }
 
 - (BODragScrollAttachInfo *)__obtainCurrentAttachInfo:(NSInteger *)count {
@@ -3505,6 +3565,8 @@ static void *sf_observe_context = "sf_observe_context";
     if ([self.dragScrollDelegate respondsToSelector:@selector(scrollViewWillBeginDragging:)]) {
         [self.dragScrollDelegate scrollViewWillBeginDragging:scrollView];
     }
+    
+    [self tryReloadWhenPanBegan];
 }
 
 - (void)scrollViewDidEndScrollingAnimation:(UIScrollView *)scrollView {
