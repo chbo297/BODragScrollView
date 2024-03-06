@@ -410,6 +410,9 @@ FOUNDATION_EXTERN NSInteger bo_findIdxInFloatArrayByValue(NSArray<NSNumber *> *a
 @property (nonatomic, assign) BOOL allowBouncesCardTop; //default: true 是否允许卡片视图顶部bounces，若为false，prefBouncesCardTop无效
 @property (nonatomic, assign) BOOL allowBouncesCardBottom; //default: true 是否允许卡片视图底部bounces，若为false，prefBouncesCardBottom无效
 
+//任何情况下，头部先bounces内部，而不是滑动卡片
+@property (nonatomic, assign) BOOL forceBouncesInnerTop;
+
 //是否正在UIView animate 的block里，当外部接收到displayHDidChange等变化时，若此变化是动画中的block导致的，则此时animationSetting为YES
 @property (nonatomic, readonly) BOOL animationSetting;
 

@@ -1115,6 +1115,11 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         
         CGFloat onepxiel = sf_getOnePxiel();
         UIEdgeInsets cinset = sf_common_contentInset(_currentScrollView);
+        
+        if (self.forceBouncesInnerTop) {
+            cinset.top += 94;
+        }
+        
         CGFloat innertotalsc = 0;
         CGFloat oriinnerosy = _currentScrollView.contentOffset.y;
         //当前内部一共滑了多远
@@ -1543,7 +1548,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                                             //还有下一个
                                             CGFloat nextdh = self.attachDisplayHAr[uidx + 1].floatValue;
                                             CGFloat nextinnerscshowheight = nextdh - dyembedtosc;
-                                            if (nextinnerscshowheight - thedh <= 0) {
+                                            if (nextinnerscshowheight - sfh <= 0) {
                                                 //下一个吸附点依然没有让内部区域超出
                                                 continue;
                                             }
