@@ -1066,6 +1066,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         //本次是清空，没有新的currentScrollView设置，则清空innerSVBehaviorInfo相关信息
         if (!currentScrollView) {
             _innerSVBehaviorInfo = nil;
+            [self __checkContentInset:nil];
         }
     }
     
@@ -1115,10 +1116,6 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         
         CGFloat onepxiel = sf_getOnePxiel();
         UIEdgeInsets cinset = sf_common_contentInset(_currentScrollView);
-        
-        if (self.forceBouncesInnerTop) {
-            cinset.top += 94;
-        }
         
         CGFloat innertotalsc = 0;
         CGFloat oriinnerosy = _currentScrollView.contentOffset.y;
@@ -1205,6 +1202,10 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                     //内部或者外部卡片的top bounces了
                     BOOL bouncescard = (self.allowBouncesCardTop &&
                                         (self.prefBouncesCardTop || !_currentScrollView.bounces));
+                    if (self.forceBouncesInnerTop) {
+                        bouncescard = NO;
+                    }
+                    
                     if (bouncescard) {
                         //优先bounces 卡片
                         if (m_topext > 0) {
@@ -1437,14 +1438,23 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                 
                 if (self.attachDisplayHAr.count > 0) {
                     //有吸附点
-                    
+                    NSMutableArray<NSNumber *> *theattachar = self.attachDisplayHAr.mutableCopy;
+                    if (self.forceBouncesInnerTop) {
+                        NSInteger theidx = bo_findIdxInFloatArrayByValue(theattachar, curmaydh, YES, NO);
+                        CGFloat thedh = theattachar[theidx].floatValue;
+                        if (thedh == curmaydh
+                            && theidx > 0) {
+                            [theattachar removeObjectsInRange:NSMakeRange(0, theidx)];
+                        }
+                    }
+                    [self __checkContentInset:theattachar];
                     //是否需要使用结合吸附点的指定判定
                     BOOL needssmartadd = NO;
                     if (self.prefDragInnerScroll) {
                         //指定从当前开始滑
-                        NSInteger theidx = bo_findIdxInFloatArrayByValue(self.attachDisplayHAr, curmaydh, NO, NO);
-                        //上面已经判断了self.attachDisplayHAr.count > 0，bo_findIdxInFloatArrayByValue返回的一定是合法值
-                        CGFloat thedh = self.attachDisplayHAr[theidx].floatValue;
+                        NSInteger theidx = bo_findIdxInFloatArrayByValue(theattachar, curmaydh, NO, NO);
+                        //上面已经判断了theattachar.count > 0，bo_findIdxInFloatArrayByValue返回的一定是合法值
+                        CGFloat thedh = theattachar[theidx].floatValue;
                         //当前面板是否在吸附点上
                         BOOL currinattach = sf_uifloat_equal(curmaydh, thedh);
                         if (currinattach) {
@@ -1456,11 +1466,11 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
 //                            if (innercursc < onepxiel) {
 //                                NSInteger nextidx = theidx + 1;
 //
-//                                if (nextidx < self.attachDisplayHAr.count) {
+//                                if (nextidx < theattachar.count) {
 //                                    needssmartadd = NO;
 //                                    needsaddoneinnerscroll = YES;
 //
-//                                    CGFloat nextdh = self.attachDisplayHAr[nextidx].floatValue;
+//                                    CGFloat nextdh = theattachar[nextidx].floatValue;
 //                                    scinnerts = sfh - nextdh + dyembedtosc;
 //                                } else {
 //                                    //数值非法, 走智能判定
@@ -1478,7 +1488,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                                 //在上、在下都认为在中间，然后两边都加滑动内部的区域，待到区域后会重新加载
                                 NSInteger nextidx = theidx + 1;
                                 
-                                if (nextidx < self.attachDisplayHAr.count) {
+                                if (nextidx < theattachar.count) {
                                     needssmartadd = NO;
                                     needsaddoneinnerscroll = NO;
                                     
@@ -1493,7 +1503,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                                         firstoffset + innercursc};
                                     innerinfoar[0] = scinf;
                                     
-                                    CGFloat nextdh = self.attachDisplayHAr[nextidx].floatValue;
+                                    CGFloat nextdh = theattachar[nextidx].floatValue;
                                     CGFloat nextoffset = firstoffset + innercursc + (nextdh - thedh); //开始滑动内部时的offset.y
                                     BODragScrollAttachInfo scinf2 =\
                                     (BODragScrollAttachInfo){-1,
@@ -1522,10 +1532,10 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
 
                         CGFloat beginscdh = 0;
                         CGFloat totalinnerscdh = dyembedtosc + scheight;
-                        NSInteger theidx = bo_findIdxInFloatArrayByValue(self.attachDisplayHAr, curmaydh, NO, YES);
+                        NSInteger theidx = bo_findIdxInFloatArrayByValue(theattachar, curmaydh, NO, YES);
                         CGFloat minshowrate = 0.7; //滑动内部时，内部至少展示70%（视觉友好），这个数值根据需要再调吧
-                        for (NSInteger uidx = theidx; uidx < self.attachDisplayHAr.count; uidx++) {
-                            CGFloat thedh = self.attachDisplayHAr[uidx].floatValue;
+                        for (NSInteger uidx = theidx; uidx < theattachar.count; uidx++) {
+                            CGFloat thedh = theattachar[uidx].floatValue;
                             BOOL thisfind = NO;
                             //找到能超过内部scrollview的吸附店
                             CGFloat innerscshowheight = thedh - dyembedtosc;
@@ -1544,9 +1554,9 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                                         //没展示完全
                                         continue;
                                     } else {
-                                        if (uidx < self.attachDisplayHAr.count - 1) {
+                                        if (uidx < theattachar.count - 1) {
                                             //还有下一个
-                                            CGFloat nextdh = self.attachDisplayHAr[uidx + 1].floatValue;
+                                            CGFloat nextdh = theattachar[uidx + 1].floatValue;
                                             CGFloat nextinnerscshowheight = nextdh - dyembedtosc;
                                             if (nextinnerscshowheight - sfh <= 0) {
                                                 //下一个吸附点依然没有让内部区域超出
@@ -1566,8 +1576,8 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                         
                         if (!findbeg
                             && scheight > 0) {
-                            NSInteger theminidx = bo_findIdxInFloatArrayByValue(self.attachDisplayHAr, totalinnerscdh, NO, NO);
-                            CGFloat themindh = self.attachDisplayHAr[theminidx].floatValue;
+                            NSInteger theminidx = bo_findIdxInFloatArrayByValue(theattachar, totalinnerscdh, NO, NO);
+                            CGFloat themindh = theattachar[theminidx].floatValue;
                             CGFloat showheighrate = (themindh - dyembedtosc) / scheight;
                             if (showheighrate >= minshowrate) {
                                 beginscdh = themindh;
@@ -2374,7 +2384,7 @@ static void *sf_observe_context = "sf_observe_context";
     }];
     
     //attachDisplayHAr改变后，可展示的最小、最大高度可能会变化，contentinse有可能需要变化
-    [self __checkContentInset];
+    [self __checkContentInset:nil];
     
     [self forceReloadCurrInnerScrollView];
 }
@@ -2422,25 +2432,29 @@ static void *sf_observe_context = "sf_observe_context";
 - (void)setMinDisplayH:(NSNumber *)minDisplayH {
     _minDisplayH = minDisplayH;
     //minDisplayH改变后，可展示的最小、最大高度可能会变化，contentinse有可能需要变化
-    [self __checkContentInset];
+    [self __checkContentInset:nil];
 }
 
-- (void)__checkContentInset {
+- (void)__checkContentInset:(nullable NSArray<NSNumber *> *)attachAr {
     //如果未layout，layout时在layoutSubviews方法里会统一处理contentinset，不需要提前处理
     if (self.embedView && _hasLayoutEmbedView) {
+        if (!attachAr) {
+            attachAr = self.attachDisplayHAr;
+        }
+        
         //已经layout的情况下，手动检查和修改状态
         UIEdgeInsets inset = UIEdgeInsetsZero;
         CGFloat selfh = CGRectGetHeight(self.bounds);
-        CGFloat mindh = (_attachDisplayHAr.count > 0 ?
-                         _attachDisplayHAr.firstObject.floatValue
+        CGFloat mindh = (attachAr.count > 0 ?
+                         attachAr.firstObject.floatValue
                          :
                          ((nil != self.minDisplayH) ? self.minDisplayH.floatValue : 66));
         inset.top = selfh - mindh;
         
-        if (self.attachDisplayHAr.count > 0 && self.embedView) {
-            CGFloat maxdh = self.attachDisplayHAr.lastObject.floatValue;
+        if (attachAr.count > 0 && self.embedView) {
+            CGFloat maxdh = attachAr.lastObject.floatValue;
             if (maxdh > mindh) {
-                inset.bottom = self.attachDisplayHAr.lastObject.floatValue - CGRectGetHeight(self.embedView.frame);
+                inset.bottom = attachAr.lastObject.floatValue - CGRectGetHeight(self.embedView.frame);
             }
         }
         
@@ -2571,8 +2585,9 @@ static void *sf_observe_context = "sf_observe_context";
             //头部bounces的情况
             CGFloat topext = minosy - offsety;
             
-            if ((self.allowBouncesCardTop &&
-                 (self.prefBouncesCardTop || !_currentScrollView.bounces))) {
+            if (!self.forceBouncesInnerTop
+                && (self.allowBouncesCardTop &&
+                    (self.prefBouncesCardTop || !_currentScrollView.bounces))) {
                 innershouldosy = innerminosy;
                 embedf.origin.y = 0;
             } else {
