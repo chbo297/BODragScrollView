@@ -1116,9 +1116,9 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         CGFloat onepxiel = sf_getOnePxiel();
         UIEdgeInsets cinset = sf_common_contentInset(_currentScrollView);
         
-        if (self.forceBouncesInnerTop) {
-            cinset.top += 94;
-        }
+//        if (self.forceBouncesInnerTop) {
+//            cinset.top += 94;
+//        }
         
         CGFloat innertotalsc = 0;
         CGFloat oriinnerosy = _currentScrollView.contentOffset.y;
@@ -1411,6 +1411,9 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                 }
             }
             
+            //若设YES，则卡片不跟内部当前offset偏移，相当于当下不滑内部，只滑卡片
+            BOOL embedTopSpNoOffset = NO;
+            
             //没有指定的行为，启用智能判定
             if (!innerinfocomplete) {
                 // 内部scrollView顶部距离embedView顶部的距离
@@ -1579,14 +1582,38 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                             CGFloat shouldscbgts = sfh - beginscdh + dyembedtosc;
                             if (curscts < (shouldscbgts - onepxiel)) {
                                 if (innercursc < (innertotalsc - onepxiel)) {
+                                    //卡片已经展示超出了内部滑动位置，但内部还不在底部
                                     if (_forceResetWhenScroll) {
-                                        if (self.allowInnerSVWhenAttachMiss
-                                            || self.prefDragCardWhenExpand) {
-                                            //从当前开始滑
-                                            beginscdh = curmaydh;
-                                            shouldscbgts = sfh - beginscdh + dyembedtosc;
+                                        CGFloat vely = [self.panGestureRecognizer velocityInView:self.window].y;
+                                        
+                                        if (vely < 0) {
+                                            //还在向更大滑动
+                                            
+                                            NSInteger theidx = bo_findIdxInFloatArrayByValue(self.attachDisplayHAr, curmaydh, NO, YES);
+                                            CGFloat thedh = self.attachDisplayHAr[theidx].floatValue;
+                                            if (thedh >= curmaydh) {
+                                                //更大处或自己吸附点
+                                                beginscdh = thedh;
+                                                shouldscbgts = sfh - beginscdh + dyembedtosc;
+                                                innerscmayinother = 1;
+                                                innertotalsc = innertotalsc - innercursc;
+//                                                embedTopSpNoOffset = YES;
+                                            } else {
+                                                //没有了
+                                                if (self.autoResetInnerSVOffsetWhenAttachMiss) {
+                                                    //强制设置内部
+                                                    innercursc = innertotalsc;
+                                                } else if (self.allowInnerSVWhenAttachMiss) {
+                                                    //从当前开始滑
+                                                    beginscdh = curmaydh;
+                                                    shouldscbgts = sfh - beginscdh + dyembedtosc;
+                                                } else {
+                                                    //强制设置内部
+                                                    innercursc = innertotalsc;
+                                                }
+                                            }
                                         } else {
-                                            innercursc = innertotalsc;
+                                            //向卡片更小滑动（可恢复原先位置）,不需要额外做事情，正常即可
                                         }
                                     } else {
                                         if (self.autoResetInnerSVOffsetWhenAttachMiss) {
@@ -1602,21 +1629,45 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                                 
                             } else if (curscts > (shouldscbgts + onepxiel)) {
                                 if (innercursc > onepxiel) {
+                                    //卡片已经展示小于了内部滑动位置，但内部还不在顶部
                                     if (_forceResetWhenScroll) {
-                                        if (self.allowInnerSVWhenAttachMiss
-                                            || self.prefDragCardWhenExpand) {
-                                            //从当前开始滑
-                                            beginscdh = curmaydh;
-                                            shouldscbgts = sfh - beginscdh + dyembedtosc;
+                                        CGFloat vely = [self.panGestureRecognizer velocityInView:self.window].y;
+                                        
+                                        if (vely > 0) {
+                                            //还在向更小滑动
+                                            
+                                            NSInteger theidx = bo_findIdxInFloatArrayByValue(self.attachDisplayHAr, curmaydh, NO, NO);
+                                            CGFloat thedh = self.attachDisplayHAr[theidx].floatValue;
+                                            if (thedh <= curmaydh) {
+                                                //更小处活自己吸附点
+                                                beginscdh = thedh;
+                                                shouldscbgts = sfh - beginscdh + dyembedtosc;
+                                                innerscmayinother = -1;
+//                                                embedTopSpNoOffset = YES;
+                                                innertotalsc = innercursc;
+                                            } else {
+                                                //没有了
+                                                if (self.autoResetInnerSVOffsetWhenAttachMiss) {
+                                                    //强制设置内部
+                                                    innercursc = innertotalsc;
+                                                } else if (self.allowInnerSVWhenAttachMiss) {
+                                                    //从当前开始滑
+                                                    beginscdh = curmaydh;
+                                                    shouldscbgts = sfh - beginscdh + dyembedtosc;
+                                                } else {
+                                                    //强制设置内部
+                                                    innercursc = innertotalsc;
+                                                }
+                                            }
                                         } else {
-                                            innercursc = 0;
+                                            //向卡片更大滑动（可恢复原先位置）,不需要额外做事情，正常即可
                                         }
                                     } else {
                                         if (self.autoResetInnerSVOffsetWhenAttachMiss) {
                                             innercursc = 0;
                                         } else {
                                             if (self.prefDragCardWhenExpand) {
-                                                innercursc = 0;
+//                                                innercursc = 0;
                                                 innerscmayinother = 1;
                                             } else {
                                                 if (self.allowInnerSVWhenAttachMiss) {
@@ -1932,7 +1983,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                 
                 hasbounces = YES;
             } else {
-                embedf.origin.y = tatolsc;
+                embedf.origin.y = (embedTopSpNoOffset ? 0 : tatolsc);
                 sfoffset.y = embedf.origin.y - embedcurrts;
             }
             
@@ -2594,10 +2645,29 @@ static void *sf_observe_context = "sf_observe_context";
                 }
             }
         } else if (offsety < _minScrollInnerOSy) {
-            //正常滑动，还没有进入内部滑动范围
-            innershouldosy = innerminosy;
-            embedf.origin.y = 0;
-            
+//            if (self.forceBouncesInnerTop) {
+//                offsety = _minScrollInnerOSy;
+//                CGPoint co = self.contentOffset;
+//                co.y = _minScrollInnerOSy;
+//                [self innerSetting:^{
+//                    self.bo_contentOffset = co;
+//                }];
+//                
+//                innershouldosy = innerminosy;
+//                embedf.origin.y = 0;
+//            } else {
+                //正常滑动，还没有进入内部滑动范围
+            if (0 == _missAttachAndNeedsReload) {
+                //没重置时才主动设置来确保，有重置时先不干涉内部
+                innershouldosy = innerminosy;
+                embedf.origin.y = 0;
+            } else {
+//                innershouldosy = innerminosy;
+                embedf.origin.y = innershouldosy - innerminosy;
+            }
+                
+                
+//            }
         } else if (offsety <= _maxScrollInnerOSy) {
             //进入了有可能内部滑动的范围
             CGFloat cursclength = 0;
@@ -2669,8 +2739,13 @@ static void *sf_observe_context = "sf_observe_context";
             
         } else if (offsety <= maxosy) {
             //正常滑动，不在内部滑动范围
-            innershouldosy = innermaxosy;
-            embedf.origin.y = innertotalsc;
+            if (0 == _missAttachAndNeedsReload) {
+                innershouldosy = innermaxosy;
+                embedf.origin.y = innertotalsc;
+            } else {
+//                innershouldosy = innerminosy;
+                embedf.origin.y = innershouldosy - innerminosy;
+            }
             
         } else {
             isbounces = YES;
@@ -2795,6 +2870,7 @@ static void *sf_observe_context = "sf_observe_context";
 - (BOOL)tryReloadWhenScrollForMissAttach:(BOOL)currTriggerInner {
     if (0 != _missAttachAndNeedsReload
         && _currentScrollView) {
+        //到内部时重置，方向命中时重置
         if (currTriggerInner) {
             //到达内部点，重置位置
             _missAttachAndNeedsReload = 0;
