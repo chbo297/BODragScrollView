@@ -917,13 +917,18 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         inset.top = selfh - mindh;
         if (self.attachDisplayHAr.count > 0 &&
             self.attachDisplayHAr.lastObject.floatValue > mindh + sf_getOnePxiel()) {
-            inset.bottom = self.attachDisplayHAr.lastObject.floatValue - CGRectGetHeight(embedrect);
+            inset.bottom = MAX(self.attachDisplayHAr.lastObject.floatValue - CGRectGetHeight(embedrect), 0);
         }
+        
+        CGFloat maxdh = (self.attachDisplayHAr.count > 0 ?
+                         self.attachDisplayHAr.lastObject.floatValue
+                         :
+                         cardsize.height);
         
         [self innerSetting:^{
             self.bo_contentInset = inset;
             self.bo_contentOffset = CGPointMake(0, -(selfh - displayh));
-            self.bo_contentSize = CGSizeMake(sfw, cardsize.height);
+            self.bo_contentSize = CGSizeMake(sfw, maxdh);
             [self setEmbedViewFrame:embedrect];
         }];
         
@@ -1070,7 +1075,11 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         }
     }
     
-    contentsize.height = CGRectGetHeight(embedf);
+    CGFloat maxdh = (self.attachDisplayHAr.count > 0 ?
+                     self.attachDisplayHAr.lastObject.floatValue
+                     :
+                     CGRectGetHeight(embedf));
+    contentsize.height = maxdh;
     [self innerSetting:^{
         self.bo_contentSize = contentsize;
     }];
@@ -1185,7 +1194,13 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
             //内部可滑动
             
             CGFloat embedmaxts = self.contentInset.top;
-            CGFloat embedmints = MIN(sfh - (CGRectGetHeight(embedf) + self.contentInset.bottom),
+            
+            CGFloat maxdh = (self.attachDisplayHAr.count > 0 ?
+                             self.attachDisplayHAr.lastObject.floatValue
+                             :
+                             CGRectGetHeight(embedf));
+            
+            CGFloat embedmints = MIN(sfh - maxdh,
                                      embedmaxts);
             
 #define m_topext (embedcurrts - embedmaxts)
@@ -1878,7 +1893,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                 }
                 //nesting end
                 
-                contentsize.height = CGRectGetHeight(embedf) + innertotalsc + nesttotalsc;
+                contentsize.height = maxdh + innertotalsc + nesttotalsc;
                 _totalScrollInnerOSy = innertotalsc + nesttotalsc;
                 
                 _innerSVAttInfAr = innerinfoar;
@@ -2217,9 +2232,10 @@ static void *sf_observe_context = "sf_observe_context";
         NSValue *offsetval = [self __checkInnerOSForDH:displayH];
         
         if (offsetval) {
-            UIScrollView *thescv = _currentScrollView;
+//            UIScrollView *thescv = _currentScrollView;
             [self __setupCurrentScrollView:nil];
-            [thescv setContentOffset:offsetval.CGPointValue animated:animated];
+            //这里在清空时，将内部捕获的scrollView强制，这个逻辑有点奇怪没看懂，去掉吧先，会导致内部scrollview位置不正确
+//            [thescv setContentOffset:offsetval.CGPointValue animated:animated];
         } else {
             [self __setupCurrentScrollView:nil];
         }
@@ -2454,7 +2470,7 @@ static void *sf_observe_context = "sf_observe_context";
         if (attachAr.count > 0 && self.embedView) {
             CGFloat maxdh = attachAr.lastObject.floatValue;
             if (maxdh > mindh) {
-                inset.bottom = attachAr.lastObject.floatValue - CGRectGetHeight(self.embedView.frame);
+                inset.bottom = MAX(attachAr.lastObject.floatValue - CGRectGetHeight(self.embedView.frame), 0);
             }
         }
         
