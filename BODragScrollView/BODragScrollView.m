@@ -927,8 +927,8 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         
         [self innerSetting:^{
             self.bo_contentInset = inset;
-            self.bo_contentOffset = CGPointMake(0, -(selfh - displayh));
             self.bo_contentSize = CGSizeMake(sfw, maxdh);
+            self.bo_contentOffset = CGPointMake(0, -(selfh - displayh));
             [self setEmbedViewFrame:embedrect];
         }];
         
