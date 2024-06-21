@@ -349,6 +349,8 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
     
     //绑定内部时，会把ScrollToTop设置为NO，如果原本是YES，需要在结束时恢复到YES
     BOOL _needsRecoverScrollVAllowScrollToTop;
+    
+    BOOL _didTouchWebView;
 }
 
 //在设置前后添加标识位，其它方法接收到滑动发生时，可根据标识位识别是否是此处设置导致。
@@ -402,6 +404,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         super.delaysContentTouches = NO;
         super.canCancelContentTouches = YES;
         super.scrollsToTop = NO;
+        self.autoresizesSubviews = NO;
         if (@available(iOS 13.0, *)) {
             super.automaticallyAdjustsScrollIndicatorInsets = NO;
         }
@@ -617,8 +620,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
             
         }
         
-        if (self.ignoreWebMulInnerScroll
-            && nil == thewebview
+        if (nil == thewebview
             && [NSStringFromClass([resp class]) isEqualToString:@"WKWebView"]
             && [resp isKindOfClass:[UIView class]]) {
             thewebview = (id)resp;
@@ -671,29 +673,42 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         [_theCtrWhenDecInner sendActionsForControlEvents:UIControlEventTouchDown];
     }
     
-    [self trySetupCurrentScrollViewWithContentView:view];
+    NSDictionary *setinfo = [self trySetupCurrentScrollViewWithContentView:view];
+    UIView *thewebview = [setinfo objectForKey:@"webView"];
+    _didTouchWebView = (nil != thewebview);
     
     return [super touchesShouldBegin:touches withEvent:event inContentView:view];
 }
 
-- (void)trySetupCurrentScrollViewWithContentView:(UIView *)view {
+- (NSDictionary *)trySetupCurrentScrollViewWithContentView:(UIView *)view {
     _innerSVBehaviorInfo = nil;
+    
+    NSMutableDictionary *retdic = @{}.mutableCopy;
+    
     NSMutableDictionary *svbehaviordic = @{}.mutableCopy;
     UIScrollView *selscv = [self __seekTargetScrollViewFrom:view svBehaviorDic:svbehaviordic];
+    UIView *thewebview = [svbehaviordic objectForKey:@"webView"];
     
-    if (self.ignoreWebMulInnerScroll) {
-        UIView *thewebview = [svbehaviordic objectForKey:@"webView"];
-        if (thewebview) {
-            //在webView中，且需要不影响多层可用的web内部scrollView
-            NSArray<UIScrollView *> *nestscar =\
-            [self __seekScrollViewMultipleNesting:selscv
-                                          endView:thewebview
-                                    includeTarget:YES
-                         judgeInnerSVBehaviorInfo:NO];
-            if (nestscar.count >= 2) {
-                //设置了ignoreWebMulInnerScroll，且发现web内有多层嵌套了，不捕获，不干涉，返回即可
-                return;
-            }
+    if (nil != thewebview) {
+        [retdic setObject:thewebview forKey:@"webView"];
+        
+        if (self.inhibitPanelForWebView) {
+            return retdic;
+        }
+        
+    }
+    
+    if (self.ignoreWebMulInnerScroll
+        && thewebview) {
+        //在webView中，且需要不影响多层可用的web内部scrollView
+        NSArray<UIScrollView *> *nestscar =\
+        [self __seekScrollViewMultipleNesting:selscv
+                                      endView:thewebview
+                                includeTarget:YES
+                     judgeInnerSVBehaviorInfo:NO];
+        if (nestscar.count >= 2) {
+            //设置了ignoreWebMulInnerScroll，且发现web内有多层嵌套了，不捕获，不干涉，返回即可
+            return retdic;
         }
     }
     
@@ -722,6 +737,8 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
     }
     
     [self __setupCurrentScrollView:selscv];
+    
+    return retdic;
 }
 
 /*
@@ -3130,33 +3147,45 @@ static void *sf_observe_context = "sf_observe_context";
                     toy = tarinfo.dragSVOffsetY;
                 }
             } else {
-                CGFloat minlength = 86; //86是调手感调出来的数字
-                if (velocity.y > 0) {
-                    if (fvel > 2.2 &&
-                        curosy > curinfo.dragSVOffsetY2 - minlength &&
-                        curidx + 1 < atinfocount) {
-                        taridx = curidx + 1;
-                        tarloc = -1;
-                        tarinfo = atinfoar[taridx];
-                    } else {
-                        taridx = curidx;
-                        tarloc = 1;
-                        tarinfo = curinfo;
+                if (self.disableInnerScrollToOut) {
+                    taridx = curidx;
+                    tarloc = curloc;
+                    tarinfo = curinfo;
+                    if (toy > tarinfo.dragSVOffsetY2) {
+                        toy = tarinfo.dragSVOffsetY2;
+                    } else if (toy < tarinfo.dragSVOffsetY) {
+                        toy = tarinfo.dragSVOffsetY;
                     }
                 } else {
-                    if (fvel > 2.2 &&
-                        curosy < curinfo.dragSVOffsetY + minlength &&
-                        curidx - 1 >= 0) {
-                        taridx = curidx - 1;
-                        tarloc = 1;
-                        tarinfo = atinfoar[taridx];
+                    CGFloat minlength = 86; //86是调手感调出来的数字
+                    if (velocity.y > 0) {
+                        if (fvel > 2.2 &&
+                            curosy > curinfo.dragSVOffsetY2 - minlength &&
+                            curidx + 1 < atinfocount) {
+                            taridx = curidx + 1;
+                            tarloc = -1;
+                            tarinfo = atinfoar[taridx];
+                        } else {
+                            taridx = curidx;
+                            tarloc = 1;
+                            tarinfo = curinfo;
+                        }
                     } else {
-                        taridx = curidx;
-                        tarloc = -1;
-                        tarinfo = curinfo;
+                        if (fvel > 2.2 &&
+                            curosy < curinfo.dragSVOffsetY + minlength &&
+                            curidx - 1 >= 0) {
+                            taridx = curidx - 1;
+                            tarloc = 1;
+                            tarinfo = atinfoar[taridx];
+                        } else {
+                            taridx = curidx;
+                            tarloc = -1;
+                            tarinfo = curinfo;
+                        }
                     }
+                    toy = (tarloc < 0 ? tarinfo.dragSVOffsetY : tarinfo.dragSVOffsetY2);
                 }
-                toy = (tarloc < 0 ? tarinfo.dragSVOffsetY : tarinfo.dragSVOffsetY2);
+                
             }
         }
     } else {
@@ -3233,13 +3262,31 @@ static void *sf_observe_context = "sf_observe_context";
                             tarloc = 1;
                         }
                     } else {
-                        if (curidx - 1 >= 0) {
-                            taridx = curidx - 1;
-                            tarloc = 1;
+                        if (self.shrinkResistance) {
+                            CGFloat minlength = 86;
+                            if ((curinfo.dragSVOffsetY - curosy) < minlength) {
+                                taridx = curidx;
+                                tarloc = curloc;
+                                tarinfo = curinfo;
+                            } else {
+                                if (curidx - 1 >= 0) {
+                                    taridx = curidx - 1;
+                                    tarloc = 1;
+                                } else {
+                                    taridx = curidx;
+                                    tarloc = -1;
+                                }
+                            }
                         } else {
-                            taridx = curidx;
-                            tarloc = -1;
+                            if (curidx - 1 >= 0) {
+                                taridx = curidx - 1;
+                                tarloc = 1;
+                            } else {
+                                taridx = curidx;
+                                tarloc = -1;
+                            }
                         }
+                        
                     }
                 }
                 
@@ -3911,6 +3958,12 @@ shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)otherGestureRec
     if (gestureRecognizer.view == self
         && self.innerScrollViewFirst
         && nil != _currentScrollView) {
+        return NO;
+    }
+    
+    if (gestureRecognizer.view == self
+        && self.inhibitPanelForWebView
+        && _didTouchWebView) {
         return NO;
     }
     

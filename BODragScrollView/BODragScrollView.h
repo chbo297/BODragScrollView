@@ -348,6 +348,18 @@ FOUNDATION_EXTERN NSInteger bo_findIdxInFloatArrayByValue(NSArray<NSNumber *> *a
 @property (nonatomic, strong, nullable) NSNumber *nestingScrollStyle;
 
 /*
+ 默认NO
+ 是否禁止内部靠惯性滑动到外部
+ */
+@property (nonatomic, assign) BOOL disableInnerScrollToOut;
+
+/*
+ 默认NO
+ 由大到小收起的阻力（防止太容易滑关闭）
+ */
+@property (nonatomic, assign) BOOL shrinkResistance;
+
+/*
  默认是NO
  设YES后，业务内部的ScrollView优先相应，卡片交互效果不再联动。
  */
@@ -359,6 +371,12 @@ FOUNDATION_EXTERN NSInteger bo_findIdxInFloatArrayByValue(NSArray<NSNumber *> *a
  避免影响web内多层scrollView的特殊效果
  */
 @property (nonatomic, assign) BOOL ignoreWebMulInnerScroll;
+
+/*
+ 默认是NO
+ 设YES后，若检测到在webView中点击，则不触发面板滑动
+ */
+@property (nonatomic, assign) BOOL inhibitPanelForWebView;
 
 //是否自动展示内部scrollview的Indictor
 @property (nonatomic, assign) BOOL autoShowInnerIndictor;
