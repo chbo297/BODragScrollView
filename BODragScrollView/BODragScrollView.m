@@ -932,15 +932,12 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         
         UIEdgeInsets inset = UIEdgeInsetsZero;
         inset.top = selfh - mindh;
-        if (self.attachDisplayHAr.count > 0 &&
-            self.attachDisplayHAr.lastObject.floatValue > mindh + sf_getOnePxiel()) {
-            inset.bottom = MAX(self.attachDisplayHAr.lastObject.floatValue - CGRectGetHeight(embedrect), 0);
-        }
         
         CGFloat maxdh = (self.attachDisplayHAr.count > 0 ?
                          self.attachDisplayHAr.lastObject.floatValue
                          :
                          cardsize.height);
+        inset.bottom = MAX(maxdh - CGRectGetHeight(self.bounds), 0);
         
         [self innerSetting:^{
             self.bo_contentInset = inset;
@@ -2487,7 +2484,7 @@ static void *sf_observe_context = "sf_observe_context";
         if (attachAr.count > 0 && self.embedView) {
             CGFloat maxdh = attachAr.lastObject.floatValue;
             if (maxdh > mindh) {
-                inset.bottom = MAX(attachAr.lastObject.floatValue - CGRectGetHeight(self.embedView.frame), 0);
+                inset.bottom = MAX(attachAr.lastObject.floatValue - CGRectGetHeight(self.bounds), 0);
             }
         }
         
@@ -3267,7 +3264,6 @@ static void *sf_observe_context = "sf_observe_context";
                             if ((curinfo.dragSVOffsetY - curosy) < minlength) {
                                 taridx = curidx;
                                 tarloc = curloc;
-                                tarinfo = curinfo;
                             } else {
                                 if (curidx - 1 >= 0) {
                                     taridx = curidx - 1;
