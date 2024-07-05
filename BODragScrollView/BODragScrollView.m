@@ -861,95 +861,109 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
     BOOL sizechange = !CGSizeEqualToSize(self.bounds.size, _lastLayoutBounds.size);
     CGRect prebounds = _lastLayoutBounds;
     _lastLayoutBounds = self.bounds;
-    if ((sizechange || !_hasLayoutEmbedView)
-        &&
-        nil != _embedView) {
-        BOOL newlayoutembed = (NO == _hasLayoutEmbedView);
-        _hasLayoutEmbedView = YES;
-        if (nil != _needsAnimatedToH) {
-            __weak typeof(self) ws = self;
-            [[NSOperationQueue mainQueue] addOperationWithBlock:^{
-                if (nil == ws.needsAnimatedToH) {
-                    return;
+    if (sizechange || !_hasLayoutEmbedView) {
+        if (nil != _embedView) {
+            BOOL newlayoutembed = (NO == _hasLayoutEmbedView);
+            _hasLayoutEmbedView = YES;
+            if (nil != _needsAnimatedToH) {
+                __weak typeof(self) ws = self;
+                [[NSOperationQueue mainQueue] addOperationWithBlock:^{
+                    if (nil == ws.needsAnimatedToH) {
+                        return;
+                    }
+                    CGFloat needsath = ws.needsAnimatedToH.floatValue;
+                    ws.needsAnimatedToH = nil;
+                    if (!sf_uifloat_equal(needsath, ws.currDisplayH)) {
+                        [ws scrollToDisplayH:needsath animated:YES completion:nil];
+                    }
+                }];
+            }
+            CGRect embedrect = self.embedView.frame;
+            CGSize cardsize = embedrect.size;
+            CGFloat displayh;
+            CGFloat mindh = (self.attachDisplayHAr.count > 0 ?
+                             self.attachDisplayHAr.firstObject.floatValue
+                             :
+                             ((nil != self.minDisplayH) ? self.minDisplayH.floatValue : 66));
+            if (nil != _needsDisplayH) {
+                //有预置值
+                displayh = _needsDisplayH.floatValue;
+                _needsDisplayH = nil;
+            } else {
+                if (newlayoutembed) {
+                    //无预置情况下首次布局embedview，取最小值
+                    displayh = mindh;
+                } else {
+                    //size变更布局
+                    displayh = CGRectGetHeight(prebounds) - (CGRectGetMinY(embedrect) - self.contentOffset.y);
                 }
-                CGFloat needsath = ws.needsAnimatedToH.floatValue;
-                ws.needsAnimatedToH = nil;
-                if (!sf_uifloat_equal(needsath, ws.currDisplayH)) {
-                    [ws scrollToDisplayH:needsath animated:YES completion:nil];
-                }
-            }];
-        }
-        CGRect embedrect = self.embedView.frame;
-        CGSize cardsize = embedrect.size;
-        CGFloat displayh;
-        CGFloat mindh = (self.attachDisplayHAr.count > 0 ?
+            }
+            
+            if (self.dragScrollDelegate && [self.dragScrollDelegate respondsToSelector:@selector(dragScrollView:layoutEmbedView:firstLayout:willShowHeight:)]) {
+                cardsize = [self.dragScrollDelegate dragScrollView:self
+                                                   layoutEmbedView:_embedView
+                                                       firstLayout:newlayoutembed
+                                                    willShowHeight:&displayh];
+                
+                //有可能在上个代理方法里改变了attachDisplayHAr或minDisplayH的值
+                mindh = (self.attachDisplayHAr.count > 0 ?
                          self.attachDisplayHAr.firstObject.floatValue
                          :
                          ((nil != self.minDisplayH) ? self.minDisplayH.floatValue : 66));
-        if (nil != _needsDisplayH) {
-            //有预置值
-            displayh = _needsDisplayH.floatValue;
-            _needsDisplayH = nil;
-        } else {
-            if (newlayoutembed) {
-                //无预置情况下首次布局embedview，取最小值
-                displayh = mindh;
-            } else {
-                //size变更布局
-                displayh = CGRectGetHeight(prebounds) - (CGRectGetMinY(embedrect) - self.contentOffset.y);
             }
-        }
-        
-        if (self.dragScrollDelegate && [self.dragScrollDelegate respondsToSelector:@selector(dragScrollView:layoutEmbedView:firstLayout:willShowHeight:)]) {
-            cardsize = [self.dragScrollDelegate dragScrollView:self
-                                               layoutEmbedView:_embedView
-                                                   firstLayout:newlayoutembed
-                                                willShowHeight:&displayh];
             
-            //有可能在上个代理方法里改变了attachDisplayHAr或minDisplayH的值
-            mindh = (self.attachDisplayHAr.count > 0 ?
-                     self.attachDisplayHAr.firstObject.floatValue
-                     :
-                     ((nil != self.minDisplayH) ? self.minDisplayH.floatValue : 66));
+            CGFloat sfw = CGRectGetWidth(self.bounds);
+            CGFloat selfh = CGRectGetHeight(self.bounds);
+            if (cardsize.height <= 0 || cardsize.width <= 0) {
+                cardsize = [self.embedView sizeThatFits:CGSizeMake(sfw, CGFLOAT_MAX)];
+            }
+            
+            if (cardsize.width <= 0) {
+                cardsize.width = sfw;
+            }
+            
+            if (cardsize.height <= 0) {
+                cardsize.height = selfh;
+            }
+            
+            embedrect.origin = CGPointMake((sfw - cardsize.width) * 0.5, 0);
+            embedrect.size = cardsize;
+            
+            UIEdgeInsets inset = UIEdgeInsetsZero;
+            inset.top = selfh - mindh;
+            
+            CGFloat maxdh;
+            if (self.attachDisplayHAr.count > 0) {
+                maxdh = MAX(mindh, self.attachDisplayHAr.lastObject.floatValue);
+            } else {
+                maxdh = MAX(mindh, cardsize.height);
+            }
+            if (nil != self.embedView) {
+                inset.bottom = maxdh - cardsize.height;
+            } else {
+                inset.bottom = 0;
+            }
+            
+            [self innerSetting:^{
+                self.bo_contentInset = inset;
+                self.bo_contentSize = CGSizeMake(sfw, cardsize.height);
+                self.bo_contentOffset = CGPointMake(0, -(selfh - displayh));
+                [self setEmbedViewFrame:embedrect];
+            }];
+            
+            [self forceReloadCurrInnerScrollView];
+            
+            //更新面板展示高度
+            self.currDisplayH = CGRectGetHeight(self.bounds) - (CGRectGetMinY(_embedView.frame) - self.contentOffset.y);
+        } else {
+            [self innerSetting:^{
+                self.bo_contentInset = UIEdgeInsetsZero;
+                self.bo_contentSize = CGSizeZero;
+                self.bo_contentOffset = CGPointZero;
+            }];
+            
+            self.currDisplayH = 0;
         }
-        
-        CGFloat sfw = CGRectGetWidth(self.bounds);
-        CGFloat selfh = CGRectGetHeight(self.bounds);
-        if (cardsize.height <= 0 || cardsize.width <= 0) {
-            cardsize = [self.embedView sizeThatFits:CGSizeMake(sfw, CGFLOAT_MAX)];
-        }
-        
-        if (cardsize.width <= 0) {
-            cardsize.width = sfw;
-        }
-        
-        if (cardsize.height <= 0) {
-            cardsize.height = selfh;
-        }
-        
-        embedrect.origin = CGPointMake((sfw - cardsize.width) * 0.5, 0);
-        embedrect.size = cardsize;
-        
-        UIEdgeInsets inset = UIEdgeInsetsZero;
-        inset.top = selfh - mindh;
-        
-        CGFloat maxdh = (self.attachDisplayHAr.count > 0 ?
-                         self.attachDisplayHAr.lastObject.floatValue
-                         :
-                         cardsize.height);
-        inset.bottom = MAX(maxdh - CGRectGetHeight(self.bounds), 0);
-        
-        [self innerSetting:^{
-            self.bo_contentInset = inset;
-            self.bo_contentSize = CGSizeMake(sfw, maxdh);
-            self.bo_contentOffset = CGPointMake(0, -(selfh - displayh));
-            [self setEmbedViewFrame:embedrect];
-        }];
-        
-        [self forceReloadCurrInnerScrollView];
-        
-        //更新面板展示高度
-        self.currDisplayH = CGRectGetHeight(self.bounds) - (CGRectGetMinY(_embedView.frame) - self.contentOffset.y);
     }
     
     [super layoutSubviews];
@@ -1089,11 +1103,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         }
     }
     
-    CGFloat maxdh = (self.attachDisplayHAr.count > 0 ?
-                     self.attachDisplayHAr.lastObject.floatValue
-                     :
-                     CGRectGetHeight(embedf));
-    contentsize.height = maxdh;
+    contentsize.height = CGRectGetHeight(embedf);
     [self innerSetting:^{
         self.bo_contentSize = contentsize;
     }];
@@ -1214,8 +1224,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                              :
                              CGRectGetHeight(embedf));
             
-            CGFloat embedmints = MIN(sfh - maxdh,
-                                     embedmaxts);
+            CGFloat embedmints = MIN(sfh - maxdh, embedmaxts);
             
 #define m_topext (embedcurrts - embedmaxts)
 #define m_topextinner (-innercursc)
@@ -1907,7 +1916,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                 }
                 //nesting end
                 
-                contentsize.height = maxdh + innertotalsc + nesttotalsc;
+                contentsize.height = CGRectGetHeight(embedf) + innertotalsc + nesttotalsc;
                 _totalScrollInnerOSy = innertotalsc + nesttotalsc;
                 
                 _innerSVAttInfAr = innerinfoar;
@@ -2481,11 +2490,18 @@ static void *sf_observe_context = "sf_observe_context";
                          ((nil != self.minDisplayH) ? self.minDisplayH.floatValue : 66));
         inset.top = selfh - mindh;
         
-        if (attachAr.count > 0 && self.embedView) {
-            CGFloat maxdh = attachAr.lastObject.floatValue;
-            if (maxdh > mindh) {
-                inset.bottom = MAX(attachAr.lastObject.floatValue - CGRectGetHeight(self.bounds), 0);
-            }
+        CGFloat embedheight = CGRectGetHeight(self.embedView.frame);
+        CGFloat maxdh;
+        if (attachAr.count > 0) {
+            maxdh = MAX(mindh, attachAr.lastObject.floatValue);
+        } else {
+            maxdh = MAX(mindh, embedheight);
+        }
+        
+        if (nil != self.embedView) {
+            inset.bottom = maxdh - embedheight;
+        } else {
+            inset.bottom = 0;
         }
         
         [self innerSetting:^{
