@@ -310,6 +310,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
 @property (nonatomic, assign) BOOL isScrollAnimating;
 
 @property (nonatomic, strong) NSNumber *needsAnimatedToH;
+@property (nonatomic, strong) NSDictionary *needsAnimatedToHSubInfo;
 
 @end
 
@@ -874,7 +875,9 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                     CGFloat needsath = ws.needsAnimatedToH.floatValue;
                     ws.needsAnimatedToH = nil;
                     if (!sf_uifloat_equal(needsath, ws.currDisplayH)) {
-                        [ws scrollToDisplayH:needsath animated:YES completion:nil];
+                        NSDictionary *toanisubinfo = ws.needsAnimatedToHSubInfo;
+                        ws.needsAnimatedToHSubInfo = nil;
+                        [ws scrollToDisplayH:needsath animated:YES subInfo:toanisubinfo completion:nil];
                     }
                 }];
             }
@@ -2283,6 +2286,7 @@ static void *sf_observe_context = "sf_observe_context";
             if (animated) {
                 //添加待播动画
                 _needsAnimatedToH = @(displayH);
+                _needsAnimatedToHSubInfo = subInfo;
             } else {
                 //还没有进行首次布局，赋值标记位，到开始布局的时候应用该高度
                 _needsDisplayH = @(displayH);
@@ -2361,7 +2365,17 @@ static void *sf_observe_context = "sf_observe_context";
                         if (nil != velnum) {
                             vel = velnum.boolValue;
                         }
-                        [self __liteAnimateToOffset:os vel:vel completion:^(BOOL isFinish) {
+                        
+                        NSNumber *additionOptions_number = [subInfo objectForKey:@"additionOptions"];
+                        UIViewAnimationOptions addoptions = 0;
+                        if (nil != additionOptions_number) {
+                            addoptions = additionOptions_number.unsignedIntegerValue;
+                        }
+                        [self __liteAnimateToOffset:os
+                                                vel:vel
+                                    additionOptions:addoptions
+                                            subInfo:subInfo
+                                         completion:^(BOOL isFinish) {
                             if (completion) {
                                 completion();
                             }
@@ -2538,6 +2552,8 @@ static void *sf_observe_context = "sf_observe_context";
 //辅助方法，执行动画
 - (void)__liteAnimateToOffset:(CGPoint)offset
                           vel:(CGFloat)vel
+              additionOptions:(UIViewAnimationOptions)additionOptions
+                      subInfo:(NSDictionary *)subInfo
                    completion:(void (^)(BOOL isFinish))completion {
     CGFloat speed = self.caAnimationSpeed;
     speed = MAX(MIN(100000.f, speed), 100);
@@ -2556,6 +2572,13 @@ static void *sf_observe_context = "sf_observe_context";
         damping = 1;
     }
     
+    NSNumber *spanidur = [subInfo objectForKey:@"sp_ani_dur"];
+    if (nil != spanidur
+        && [spanidur isKindOfClass:[NSNumber class]]) {
+        //限制最大，防止传参有误时间过长
+        dur = MIN(spanidur.floatValue, 0.9);
+    }
+    
     [UIView animateWithDuration:dur
                           delay:0
          usingSpringWithDamping:damping
@@ -2563,7 +2586,8 @@ static void *sf_observe_context = "sf_observe_context";
                         options:(UIViewAnimationOptionBeginFromCurrentState
                                  | UIViewAnimationOptionAllowAnimatedContent
                                  | UIViewAnimationOptionAllowUserInteraction
-                                 | UIViewAnimationOptionLayoutSubviews)
+                                 | UIViewAnimationOptionLayoutSubviews
+                                 | additionOptions)
                      animations:^{
         self.isScrollAnimating = YES;
         self.bo_contentOffset = offset;
@@ -3534,7 +3558,11 @@ static void *sf_observe_context = "sf_observe_context";
             
             BOOL shouldtargetto = _waitDidTargetTo && !_ignoreWaitDidTargetTo;
             _waitDidTargetTo = NO;
-            [self __liteAnimateToOffset:toos vel:vely completion:^(BOOL isFinish) {
+            [self __liteAnimateToOffset:toos
+                                    vel:vely
+                        additionOptions:0
+                                subInfo:nil
+                             completion:^(BOOL isFinish) {
                 if (shouldtargetto) {
                     if (self.dragScrollDelegate &&
                         [self.dragScrollDelegate respondsToSelector:@selector(dragScrollView:didTargetToH:reason:)]) {
@@ -3718,6 +3746,35 @@ static void *sf_observe_context = "sf_observe_context";
     }
 }
 
+- (BOOL)i_scrollView:(UIScrollView *)scView areaCanGesVel:(CGFloat)gesVel {
+    if (!scView
+        || 0 == gesVel) {
+        return NO;
+    }
+    
+    CGFloat innertotalsc = 0;
+    CGFloat oriinnerosy = scView.contentOffset.y;
+    UIEdgeInsets cinset = sf_common_contentInset(scView);
+    //当前内部一共滑了多远
+    CGFloat innercursc = oriinnerosy + cinset.top;
+    
+    innertotalsc = (cinset.top
+                    + scView.contentSize.height
+                    + cinset.bottom
+                    - CGRectGetHeight(scView.bounds));
+    if (innertotalsc <= 0) {
+        return NO;
+    }
+    
+    if (gesVel < 0) {
+        return innercursc < innertotalsc;
+    } else if (gesVel > 0) {
+        return innercursc > 0;
+    } else {
+        return NO;
+    }
+}
+
 #pragma mark - gesture
 
 //不实现该方法，默认NO即可
@@ -3730,6 +3787,14 @@ shouldRequireFailureOfGestureRecognizer:(UIGestureRecognizer *)otherGestureRecog
         if (otherGestureRecognizer.view == _currentScrollView) {
             if (self.innerScrollViewFirst) {
                 return YES;
+            } else if (self.innerScrollViewFirstBugCanDrag) {
+                CGFloat vely = [self.panGestureRecognizer velocityInView:self.window].y;
+                BOOL caninnerscroll = [self i_scrollView:_currentScrollView areaCanGesVel:vely];
+                if (caninnerscroll) {
+                    return YES;
+                } else {
+                    return NO;
+                }
             } else {
                 return NO;
             }
@@ -3791,6 +3856,14 @@ shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)otherGestureRec
         if (otherGestureRecognizer.view == _currentScrollView) {
             if (self.innerScrollViewFirst) {
                 return NO;
+            } else if (self.innerScrollViewFirstBugCanDrag) {
+                CGFloat vely = [self.panGestureRecognizer velocityInView:self.window].y;
+                BOOL caninnerscroll = [self i_scrollView:_currentScrollView areaCanGesVel:vely];
+                if (caninnerscroll) {
+                    return NO;
+                } else {
+                    return YES;
+                }
             } else {
                 return YES;
             }
@@ -3968,10 +4041,21 @@ shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)otherGestureRec
     }
     
     if (gestureRecognizer.view == self
-        && self.innerScrollViewFirst
         && nil != _currentScrollView) {
-        return NO;
+        if (self.innerScrollViewFirst) {
+            return NO;
+        } else if (self.innerScrollViewFirstBugCanDrag) {
+            CGFloat vely = [self.panGestureRecognizer velocityInView:self.window].y;
+            BOOL caninnerscroll = [self i_scrollView:_currentScrollView areaCanGesVel:vely];
+            if (caninnerscroll) {
+                return NO;
+            } else {
+                return YES;
+            }
+        }
     }
+    
+    
     
     if (gestureRecognizer.view == self
         && self.inhibitPanelForWebView
