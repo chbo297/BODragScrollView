@@ -1133,8 +1133,15 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         }
     }
     
-    if (nil != currentScrollView
-        && !self.innerScrollViewFirst) {
+    //根据currentScrollView矫正bounces、设置滑动区域等联动逻辑
+    BOOL shouldhandlecurrsc = (nil != _currentScrollView);
+    if (self.innerScrollViewFirst
+        || (self.innerScrollViewFirstBugCanDrag
+            && [self i_scrollView:_currentScrollView prefGesVel:0])) {
+        //内部优先响应，或者innerScrollViewFirstBugCanDrag且内部需要响应，不需要再处理联动逻辑了
+        shouldhandlecurrsc = NO;
+    }
+    if (shouldhandlecurrsc) {
         //处理新捕获的scrollview
         
         //夹在_currentScrollView和embedView层级中间的嵌套scrollView
@@ -3746,9 +3753,8 @@ static void *sf_observe_context = "sf_observe_context";
     }
 }
 
-- (BOOL)i_scrollView:(UIScrollView *)scView areaCanGesVel:(CGFloat)gesVel {
-    if (!scView
-        || 0 == gesVel) {
+- (BOOL)i_scrollView:(UIScrollView *)scView prefGesVel:(CGFloat)gesVel {
+    if (!scView) {
         return NO;
     }
     
@@ -3766,12 +3772,22 @@ static void *sf_observe_context = "sf_observe_context";
         return NO;
     }
     
+    if (innercursc < 0
+        || innercursc > innertotalsc) {
+        //在bounces中，要响应
+        return YES;
+    }
+    
     if (gesVel < 0) {
         return innercursc < innertotalsc;
     } else if (gesVel > 0) {
         return innercursc > 0;
     } else {
-        return NO;
+        if (scView.decelerating) {
+            return YES;
+        } else {
+            return NO;
+        }
     }
 }
 
@@ -3789,7 +3805,7 @@ shouldRequireFailureOfGestureRecognizer:(UIGestureRecognizer *)otherGestureRecog
                 return YES;
             } else if (self.innerScrollViewFirstBugCanDrag) {
                 CGFloat vely = [self.panGestureRecognizer velocityInView:self.window].y;
-                BOOL caninnerscroll = [self i_scrollView:_currentScrollView areaCanGesVel:vely];
+                BOOL caninnerscroll = [self i_scrollView:_currentScrollView prefGesVel:vely];
                 if (caninnerscroll) {
                     return YES;
                 } else {
@@ -3858,7 +3874,7 @@ shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)otherGestureRec
                 return NO;
             } else if (self.innerScrollViewFirstBugCanDrag) {
                 CGFloat vely = [self.panGestureRecognizer velocityInView:self.window].y;
-                BOOL caninnerscroll = [self i_scrollView:_currentScrollView areaCanGesVel:vely];
+                BOOL caninnerscroll = [self i_scrollView:_currentScrollView prefGesVel:vely];
                 if (caninnerscroll) {
                     return NO;
                 } else {
@@ -4046,7 +4062,7 @@ shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)otherGestureRec
             return NO;
         } else if (self.innerScrollViewFirstBugCanDrag) {
             CGFloat vely = [self.panGestureRecognizer velocityInView:self.window].y;
-            BOOL caninnerscroll = [self i_scrollView:_currentScrollView areaCanGesVel:vely];
+            BOOL caninnerscroll = [self i_scrollView:_currentScrollView prefGesVel:vely];
             if (caninnerscroll) {
                 return NO;
             } else {
