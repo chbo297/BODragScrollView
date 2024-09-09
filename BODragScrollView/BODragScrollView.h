@@ -369,7 +369,7 @@ FOUNDATION_EXTERN NSInteger bo_findIdxInFloatArrayByValue(NSArray<NSNumber *> *a
  默认是NO
  设YES后，业务内部的ScrollView优先相应，卡片交互效果不联动，但手势开始位置在内部的边界且方向上内部无滑动区域时会响应面板滑动
  */
-@property (nonatomic, assign) BOOL innerScrollViewFirstBugCanDrag;
+@property (nonatomic, assign) BOOL innerScrollViewFirstButCanDrag;
 
 /*
  默认是NO

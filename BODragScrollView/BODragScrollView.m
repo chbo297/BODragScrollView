@@ -1136,9 +1136,9 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
     //根据currentScrollView矫正bounces、设置滑动区域等联动逻辑
     BOOL shouldhandlecurrsc = (nil != _currentScrollView);
     if (self.innerScrollViewFirst
-        || (self.innerScrollViewFirstBugCanDrag
+        || (self.innerScrollViewFirstButCanDrag
             && [self i_scrollView:_currentScrollView prefGesVel:0])) {
-        //内部优先响应，或者innerScrollViewFirstBugCanDrag且内部需要响应，不需要再处理联动逻辑了
+        //内部优先响应，或者innerScrollViewFirstButCanDrag且内部需要响应，不需要再处理联动逻辑了
         shouldhandlecurrsc = NO;
     }
     if (shouldhandlecurrsc) {
@@ -3803,7 +3803,7 @@ shouldRequireFailureOfGestureRecognizer:(UIGestureRecognizer *)otherGestureRecog
         if (otherGestureRecognizer.view == _currentScrollView) {
             if (self.innerScrollViewFirst) {
                 return YES;
-            } else if (self.innerScrollViewFirstBugCanDrag) {
+            } else if (self.innerScrollViewFirstButCanDrag) {
                 CGFloat vely = [self.panGestureRecognizer velocityInView:self.window].y;
                 BOOL caninnerscroll = [self i_scrollView:_currentScrollView prefGesVel:vely];
                 if (caninnerscroll) {
@@ -3872,7 +3872,7 @@ shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)otherGestureRec
         if (otherGestureRecognizer.view == _currentScrollView) {
             if (self.innerScrollViewFirst) {
                 return NO;
-            } else if (self.innerScrollViewFirstBugCanDrag) {
+            } else if (self.innerScrollViewFirstButCanDrag) {
                 CGFloat vely = [self.panGestureRecognizer velocityInView:self.window].y;
                 BOOL caninnerscroll = [self i_scrollView:_currentScrollView prefGesVel:vely];
                 if (caninnerscroll) {
@@ -4060,7 +4060,7 @@ shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)otherGestureRec
         && nil != _currentScrollView) {
         if (self.innerScrollViewFirst) {
             return NO;
-        } else if (self.innerScrollViewFirstBugCanDrag) {
+        } else if (self.innerScrollViewFirstButCanDrag) {
             CGFloat vely = [self.panGestureRecognizer velocityInView:self.window].y;
             BOOL caninnerscroll = [self i_scrollView:_currentScrollView prefGesVel:vely];
             if (caninnerscroll) {
