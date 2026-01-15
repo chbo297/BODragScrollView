@@ -1234,7 +1234,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                              :
                              CGRectGetHeight(embedf));
             
-            CGFloat embedmints = MIN(sfh - maxdh, embedmaxts);
+            CGFloat embedmints = MIN(sfh - maxdh, embedmaxts); //embed视图距离容器顶部的最小距离，可以是负的
             
 #define m_topext (embedcurrts - embedmaxts)
 #define m_topextinner (-innercursc)
@@ -1592,6 +1592,13 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                                 && (innerscshowheight / scheight) >= minshowrate) {
                                 thisfind = YES;
                                 //有一个吸附点可保证内部scrollView至少展示五分之一（根据需要调整吧），可以作为开始内部滑动的点
+                                beginscdh = thedh;
+                                findbeg = YES;
+                            } else if (!findbeg
+                                       && uidx == theattachar.count - 1
+                                       && self.prefDragCardWhenExpand) {
+                                //在设置了prefDragCardWhenExpand的情况下，如果到最后一个还没找到,按最后一个开始滑动内部
+                                thisfind = YES;
                                 beginscdh = thedh;
                                 findbeg = YES;
                             }
@@ -2261,6 +2268,15 @@ static void *sf_observe_context = "sf_observe_context";
                    animated:(BOOL)animated
                     subInfo:(NSDictionary *)subInfo
                  completion:(void (^ __nullable)(void))completion {
+    if (displayH == self.currDisplayH) {
+        //相同可以直接返回
+        if (completion) {
+            completion();
+        }
+        
+        return displayH;
+    }
+    
     if (_currentScrollView) {
         NSValue *offsetval = [self __checkInnerOSForDH:displayH];
         
