@@ -1591,7 +1591,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                                 && scheight > 0
                                 && (innerscshowheight / scheight) >= minshowrate) {
                                 thisfind = YES;
-                                //有一个吸附点可保证内部scrollView至少展示五分之一（根据需要调整吧），可以作为开始内部滑动的点
+                                //有一个吸附点可保证内部scrollView至少展示一定比例（根据需要调整吧），可以作为开始内部滑动的点
                                 beginscdh = thedh;
                                 findbeg = YES;
                             } else if (!findbeg
@@ -2726,7 +2726,10 @@ static void *sf_observe_context = "sf_observe_context";
                             } else {
                                 CGPoint theos = theinfosv.contentOffset;
                                 theos.y = innerscinfo.innerOffsetB;
-                                theinfosv.bo_contentOffset = theos;
+                                //加一个scrollEnabled，若外部自己在做某些动画，可以关闭scrollEnabled，内部就不再滑动置值了
+                                if (theinfosv.scrollEnabled) {
+                                    theinfosv.bo_contentOffset = theos;
+                                }
                             }
                             cursclength += infomaxsc;
                             continue;
@@ -2745,7 +2748,9 @@ static void *sf_observe_context = "sf_observe_context";
                         } else {
                             CGPoint theos = theinfosv.contentOffset;
                             theos.y = innerscinfo.innerOffsetB;
-                            theinfosv.bo_contentOffset = theos;
+                            if (theinfosv.scrollEnabled) {
+                                theinfosv.bo_contentOffset = theos;
+                            }
                         }
                         isinnersc = NO;
                     } else {
@@ -2756,7 +2761,9 @@ static void *sf_observe_context = "sf_observe_context";
                         } else {
                             CGPoint theos = theinfosv.contentOffset;
                             theos.y = innerscinfo.innerOffsetA + exty;
-                            theinfosv.bo_contentOffset = theos;
+                            if (theinfosv.scrollEnabled) {
+                                theinfosv.bo_contentOffset = theos;
+                            }
                         }
                         //exty是0的话，标识已经到外部了
                         isinnersc = (exty > 0);
