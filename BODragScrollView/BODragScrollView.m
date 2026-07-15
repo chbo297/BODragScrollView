@@ -1710,6 +1710,8 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                     
                 } else {
                     //没有指定吸附点
+                    //无吸附点只表示面板连续移动，不表示禁用内外联动，仍需生成默认内部滑动区间
+                    needsaddoneinnerscroll = YES;
                     
                     if (self.prefDragInnerScroll) {
                         //默认从当前开始滑动
@@ -3081,6 +3083,22 @@ static void *sf_observe_context = "sf_observe_context";
 }
 
 /*
+ 根据联动模型将BODragScrollView的offset.y投影为面板展示高度。
+ 无吸附点时系统的targetContentOffset需要原样保留，但内部滑动消耗的距离
+ 不能重复计入面板展示高度。
+ */
+- (CGFloat)__displayHForDragOffsetY:(CGFloat)dragOffsetY {
+    CGFloat consumedInnerDistance = 0;
+    for (NSInteger idx = 0; idx < _innerSVAttInfCount; idx++) {
+        BODragScrollAttachInfo info = _innerSVAttInfAr[idx];
+        CGFloat segmentLength = MAX(info.innerOffsetB - info.innerOffsetA, 0);
+        CGFloat segmentProgress = MIN(MAX(dragOffsetY - info.dragSVOffsetY, 0), segmentLength);
+        consumedInnerDistance += segmentProgress;
+    }
+    return CGRectGetHeight(self.bounds) + dragOffsetY - consumedInnerDistance;
+}
+
+/*
  只有内部在使用，暂不必用enum
  return:
  00: 无特殊滑动逻辑
@@ -3508,7 +3526,7 @@ static void *sf_observe_context = "sf_observe_context";
                      withVelocity:(CGPoint)velocity
               targetContentOffset:(inout CGPoint *)targetContentOffset {
     
-    BODragScrollAttachInfo theinfo;
+    BODragScrollAttachInfo theinfo = {0};
     NSInteger scrolltype =\
     [self __scrollViewWillEndDragging:scrollView
                          withVelocity:velocity
@@ -3523,7 +3541,7 @@ static void *sf_observe_context = "sf_observe_context";
     
     CGFloat dragoutdy = (*targetContentOffset).y;
     CGFloat newdh;
-    if (_innerSVAttInfCount > 0) {
+    if (0 != scrolltype && _innerSVAttInfCount > 0) {
         if (dragoutdy < theinfo.dragSVOffsetY) {
             newdh = theinfo.displayH - theinfo.dragSVOffsetY + dragoutdy;
         } else if (dragoutdy <= theinfo.dragSVOffsetY2) {
@@ -3532,7 +3550,7 @@ static void *sf_observe_context = "sf_observe_context";
             newdh = theinfo.displayH + dragoutdy - theinfo.dragSVOffsetY2;
         }
     } else {
-        newdh = CGRectGetHeight(self.bounds) + dragoutdy;
+        newdh = [self __displayHForDragOffsetY:dragoutdy];
     }
     
     BOOL willdecelerate =\
