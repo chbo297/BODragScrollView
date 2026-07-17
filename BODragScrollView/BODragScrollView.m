@@ -4174,15 +4174,20 @@ shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)otherGestureRec
  这里提供一个手动执行吸附的方法
  */
 - (void)takeAttach:(BOOL)animated subInfo:(NSDictionary *)subInfo {
-    BODragScrollAttachInfo theinfo;
+    // 初始化结构并先检查 scrolltype，避免在没有合法吸附目标时读取未定义的 theinfo。
+    BODragScrollAttachInfo theinfo = {0};
     CGPoint of = self.contentOffset;
     CGPoint inof = of;
-    __unused NSInteger scrolltype =\
+    NSInteger scrolltype =\
     [self __scrollViewWillEndDragging:self
                          withVelocity:CGPointZero
                   targetContentOffset:&inof
                            attachInfo:&theinfo];
     
+    if (0 == scrolltype) {
+        return;
+    }
+
     if (!sf_uifloat_equal(inof.y, of.y)) {
         [self scrollToDisplayH:theinfo.displayH animated:animated];
     }
