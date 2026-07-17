@@ -1010,7 +1010,12 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
             
             [self forceReloadCurrInnerScrollView];
             
-            // 更新面板展示高度，统一复用真实 model 几何计算。
+            // forceReload 可能再次调整联动几何，因此在它结束后，才按 layout 已知的
+            // displayh 纠正小于一个物理像素的 frame 尾差。该写入仍受 innerSetting 保护。
+            [self innerSetting:^{
+                [self __correctDisplayHResidualToTarget:displayh];
+            }];
+            // 无论是否能 bit-exact 收口，都只发布纠正后复读到的真实几何。
             self.currDisplayH = [self __currentDisplayHFromGeometry];
         } else {
             [self innerSetting:^{
