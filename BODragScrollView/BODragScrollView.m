@@ -73,13 +73,26 @@ typedef struct BODragScrollAttachInfo {
     CGFloat dragSVOffsetY2;
 } BODragScrollAttachInfo;
 
-static CGFloat sf_getOnePxiel(void) {
-    static CGFloat onepxiel;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        onepxiel = 1.f / [UIScreen mainScreen].scale;
-    });
-    return onepxiel;
+// 一个物理像素用于离散场景和边界归属，仅作为防抖边界带，
+// 不代表当前展示高度或公开接口允许存在一个像素误差。
+// 不缓存 mainScreen.scale：view 可能位于外接屏幕，移动后也应使用当前屏幕的 scale。
+static CGFloat sf_onePhysicalPixel(UIView *view) {
+    CGFloat scale = view.window.screen.scale;
+    if (scale <= 0) {
+        scale = view.traitCollection.displayScale;
+    }
+    if (scale <= 0) {
+        scale = UIScreen.mainScreen.scale;
+    }
+    return 1.f / MAX(scale, 1.f);
+}
+
+static CGFloat sf_displayHeight(CGFloat viewportHeight,
+                                CGFloat contentOffsetY,
+                                CGRect embedViewFrame) {
+    // 用调用方给定的 viewportHeight 统一反算 model 几何；layout resize 时这里可传
+    // 旧 viewport 高度以保持原展示高度。不读取吸附目标，也不采样 presentation layer。
+    return viewportHeight - (CGRectGetMinY(embedViewFrame) - contentOffsetY);
 }
 
 static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelector) {
@@ -367,6 +380,16 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         innerSettingBlock();
         self.innerSetting = NO;
     }
+}
+
+// 统一从真实 model 几何读取当前高度；不读取吸附目标，也不使用容差修饰返回值。
+- (CGFloat)__currentDisplayHFromGeometry {
+    if (!_embedView) {
+        return 0;
+    }
+    return sf_displayHeight(CGRectGetHeight(self.bounds),
+                            self.contentOffset.y,
+                            _embedView.frame);
 }
 
 - (instancetype)initWithFrame:(CGRect)frame {
@@ -898,7 +921,9 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                     displayh = mindh;
                 } else {
                     //size变更布局
-                    displayh = CGRectGetHeight(prebounds) - (CGRectGetMinY(embedrect) - self.contentOffset.y);
+                    displayh = sf_displayHeight(CGRectGetHeight(prebounds),
+                                                self.contentOffset.y,
+                                                embedrect);
                 }
             }
             
@@ -1157,7 +1182,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
         
         _lastInnerSCSize = _currentScrollView.contentSize;
         
-        CGFloat onepxiel = sf_getOnePxiel();
+        CGFloat onepxiel = sf_onePhysicalPixel(self);
         UIEdgeInsets cinset = sf_common_contentInset(_currentScrollView);
         
         CGFloat innertotalsc = 0;
@@ -1490,7 +1515,10 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                     if (self.forceBouncesInnerTop) {
                         NSInteger theidx = bo_findIdxInFloatArrayByValue(theattachar, curmaydh, YES, NO);
                         CGFloat thedh = theattachar[theidx].floatValue;
-                        if (thedh == curmaydh
+                        // 这里只判断当前属于哪个离散场景，不对外发布 thedh。
+                        // 一物理像素是场景边界带：带内真实差值也归为同一场景，
+                        // 用于避免边界抖动让 forceBounces 场景反复切换。
+                        if (fabs(thedh - curmaydh) < onepxiel
                             && theidx > 0) {
                             [theattachar removeObjectsInRange:NSMakeRange(0, theidx)];
                         }
@@ -1503,8 +1531,10 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                         NSInteger theidx = bo_findIdxInFloatArrayByValue(theattachar, curmaydh, NO, NO);
                         //上面已经判断了theattachar.count > 0，bo_findIdxInFloatArrayByValue返回的一定是合法值
                         CGFloat thedh = theattachar[theidx].floatValue;
-                        //当前面板是否在吸附点上
-                        BOOL currinattach = sf_uifloat_equal(curmaydh, thedh);
+                        // 这是智能联动建模时的场景归属，不是当前高度的精确验收。
+                        // 一物理像素边界带内统一归属同一场景；实际 frame/offset
+                        // 仍使用 model 几何计算，不把吸附点值冒充当前高度。
+                        BOOL currinattach = fabs(curmaydh - thedh) < onepxiel;
                         if (currinattach) {
                             //默认当前开始滑即可
                             needssmartadd = NO;
@@ -2222,10 +2252,10 @@ static void *sf_observe_context = "sf_observe_context";
     if (_innerSVAttInfCount > 0) {
         CGPoint offset = _currentScrollView.contentOffset;
         NSNumber *innershouldosy = nil;
-        CGFloat onepxiel = sf_getOnePxiel();
+        CGFloat onepxiel = sf_onePhysicalPixel(self);
         for (NSInteger infoidx = 0; infoidx < _innerSVAttInfCount; infoidx++) {
             BODragScrollAttachInfo innerscinfo = _innerSVAttInfAr[infoidx];
-            if (dh < innerscinfo.displayH - sf_getOnePxiel()) {
+            if (dh < innerscinfo.displayH - onepxiel) {
                 //在最底部
                 if (!sf_uifloat_equal(offset.y, innerscinfo.innerOffsetA)) {
                     innershouldosy = @(innerscinfo.innerOffsetA);
@@ -2625,7 +2655,7 @@ static void *sf_observe_context = "sf_observe_context";
     
     if (self.delayCallDisplayHChangeWhenAnimation) {
         [[NSOperationQueue mainQueue] addOperationWithBlock:^{
-            CGFloat newdh = CGRectGetHeight(self.bounds) - (CGRectGetMinY(self.embedView.frame) - self.contentOffset.y);
+            CGFloat newdh = [self __currentDisplayHFromGeometry];
             if (self.needsAnimationWhenDelayCall) {
                 [UIView animateWithDuration:dur
                                       delay:0
@@ -2715,8 +2745,10 @@ static void *sf_observe_context = "sf_observe_context";
             for (NSInteger infoidx = 0; infoidx < _innerSVAttInfCount; infoidx++) {
                 BODragScrollAttachInfo innerscinfo = _innerSVAttInfAr[infoidx];
                 UIScrollView *theinfosv = [self __obtainScrollViewWithIdx:innerscinfo.scrollViewIdx];
-                if (offsety + sf_getOnePxiel() >= innerscinfo.dragSVOffsetY) {
-                    CGFloat infomaxsc = innerscinfo.innerOffsetB - innerscinfo.innerOffsetA;
+                // 原模型允许在段起点前一个物理像素提前进入边界判断，因此下面的
+                // segmentOffset 可能为负；不要在这里 clamp，否则会改变原有交接手感。
+                if (offsety + sf_onePhysicalPixel(self) >= innerscinfo.dragSVOffsetY) {
+                    CGFloat segmentLength = innerscinfo.innerOffsetB - innerscinfo.innerOffsetA;
                     if (infoidx + 1 < _innerSVAttInfCount) {
                         //有下一个
                         BODragScrollAttachInfo nextinfo = _innerSVAttInfAr[infoidx + 1];
@@ -2733,7 +2765,7 @@ static void *sf_observe_context = "sf_observe_context";
                                     theinfosv.bo_contentOffset = theos;
                                 }
                             }
-                            cursclength += infomaxsc;
+                            cursclength += segmentLength;
                             continue;
                         }
                     } else {
@@ -2741,10 +2773,13 @@ static void *sf_observe_context = "sf_observe_context";
                         //使用当前
                     }
                     
-                    CGFloat exty = offsety - innerscinfo.dragSVOffsetY;
-                    if (exty > infomaxsc) {
+                    // outer offset 相对当前内部联动段起点的实际位移，单位是 pt，
+                    // 不是 0...1 比例。负值来自上方刻意保留的一像素边界带；段尾
+                    // 也继续走原分支，不额外 clamp 或改变越界行为。
+                    CGFloat segmentOffset = offsety - innerscinfo.dragSVOffsetY;
+                    if (segmentOffset > segmentLength) {
                         //超过了
-                        cursclength += infomaxsc;
+                        cursclength += segmentLength;
                         if (theinfosv == _currentScrollView) {
                             innershouldosy = innerscinfo.innerOffsetB;
                         } else {
@@ -2757,18 +2792,19 @@ static void *sf_observe_context = "sf_observe_context";
                         isinnersc = NO;
                     } else {
                         //在该滑动内部的区间
-                        cursclength += exty;
+                        cursclength += segmentOffset;
                         if (theinfosv == _currentScrollView) {
-                            innershouldosy = innerscinfo.innerOffsetA + exty;
+                            innershouldosy = innerscinfo.innerOffsetA + segmentOffset;
                         } else {
                             CGPoint theos = theinfosv.contentOffset;
-                            theos.y = innerscinfo.innerOffsetA + exty;
+                            theos.y = innerscinfo.innerOffsetA + segmentOffset;
                             if (theinfosv.scrollEnabled) {
                                 theinfosv.bo_contentOffset = theos;
                             }
                         }
-                        //exty是0的话，标识已经到外部了
-                        isinnersc = (exty > 0);
+                        // segmentOffset == 0 仍是 outer 到 inner 的边界；只有大于 0
+                        // 才标记正在滑内部。固定高度则从段起点（含 0）开始生效。
+                        isinnersc = (segmentOffset > 0);
                     }
                     embedf.origin.y = cursclength;
                     findtheinfo = YES;
@@ -2884,7 +2920,7 @@ static void *sf_observe_context = "sf_observe_context";
         }
     }
     
-    CGFloat newdh = CGRectGetHeight(self.bounds) - (CGRectGetMinY(_embedView.frame) - self.contentOffset.y);
+    CGFloat newdh = [self __currentDisplayHFromGeometry];
     
     //滑动外部时使用DecelerationRateFast
     if (scrollView.bods_isTracking) {
@@ -2982,10 +3018,13 @@ static void *sf_observe_context = "sf_observe_context";
         if (idxb < _innerSVAttInfCount) {
             binfo = _innerSVAttInfAr[idxb];
             if (nil != aYESbNO && aYESbNO.boolValue) {
-                if (binfo.displayH < (adh - sf_getOnePxiel())) {
+                // 这里只把高度位于同一物理像素边界带的外部吸附点与内部联动段
+                // 合并成同一场景；带内可包含真实 subpixel 差值，但不会把吸附点
+                // 数值写成当前公开高度。
+                if (binfo.displayH < (adh - sf_onePhysicalPixel(self))) {
                     aYESbNO = @(NO);
                     idxb++;
-                } else if (binfo.displayH > (adh + sf_getOnePxiel())) {
+                } else if (binfo.displayH > (adh + sf_onePhysicalPixel(self))) {
                     idxa++;
                 } else {
                     //两个高度相等，使用b的信息，因为要把里面滑动内部的信息带上
@@ -3084,15 +3123,21 @@ static void *sf_observe_context = "sf_observe_context";
 
 /*
  根据联动模型将BODragScrollView的offset.y投影为面板展示高度。
- 无吸附点时系统的targetContentOffset需要原样保留，但内部滑动消耗的距离
- 不能重复计入面板展示高度。
+ 当本次目标没有被组件改写成吸附目标时，系统/外部给出的 targetContentOffset
+ 需要原样保留，但内部滑动消耗的距离不能重复计入面板展示高度。
  */
 - (CGFloat)__displayHForDragOffsetY:(CGFloat)dragOffsetY {
     CGFloat consumedInnerDistance = 0;
     for (NSInteger idx = 0; idx < _innerSVAttInfCount; idx++) {
         BODragScrollAttachInfo info = _innerSVAttInfAr[idx];
         CGFloat segmentLength = MAX(info.innerOffsetB - info.innerOffsetA, 0);
-        CGFloat segmentProgress = MIN(MAX(dragOffsetY - info.dragSVOffsetY, 0), segmentLength);
+        CGFloat segmentOffset = dragOffsetY - info.dragSVOffsetY;
+        if (segmentOffset >= 0 && segmentOffset <= segmentLength) {
+            // 该方法只预测 willTargetToH；内部联动段内的高度是模型离散值，
+            // 直接返回它，避免用 offset 减去已消费距离重新构造出浮点尾差。
+            return info.displayH;
+        }
+        CGFloat segmentProgress = MIN(MAX(segmentOffset, 0), segmentLength);
         consumedInnerDistance += segmentProgress;
     }
     return CGRectGetHeight(self.bounds) + dragOffsetY - consumedInnerDistance;
@@ -3124,7 +3169,7 @@ static void *sf_observe_context = "sf_observe_context";
     }
     
     NSInteger scrolltype = 0;
-    CGFloat onepxiel = sf_getOnePxiel();
+    CGFloat onepxiel = sf_onePhysicalPixel(self);
     
     CGPoint targetos = *targetContentOffset;
     CGFloat toy = targetos.y;
@@ -3380,8 +3425,9 @@ static void *sf_observe_context = "sf_observe_context";
             toy = (tarloc < 0 ? tarinfo.dragSVOffsetY : tarinfo.dragSVOffsetY2);
         }
         
-        //由bounces状态弹到置顶、置底状态
-        if ((curosy < -self.contentInset.top && sf_uifloat_equal(toy, -self.contentInset.top))
+        // 由 bounces 状态弹回边界属于场景判定：顶部分支把系统目标的一物理像素
+        // 作为边界带；底部分支保持原实现，仅依据当前 offset 已越过底边界。
+        if ((curosy < -self.contentInset.top && fabs(toy + self.contentInset.top) < onepxiel)
             ||
             (curosy >
              MAX(self.contentSize.height + self.contentInset.bottom - CGRectGetHeight(self.bounds),
