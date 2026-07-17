@@ -981,8 +981,8 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
             
             [self forceReloadCurrInnerScrollView];
             
-            //更新面板展示高度
-            self.currDisplayH = CGRectGetHeight(self.bounds) - (CGRectGetMinY(_embedView.frame) - self.contentOffset.y);
+            // 更新面板展示高度，统一复用真实 model 几何计算。
+            self.currDisplayH = [self __currentDisplayHFromGeometry];
         } else {
             [self innerSetting:^{
                 self.bo_contentInset = UIEdgeInsetsZero;
