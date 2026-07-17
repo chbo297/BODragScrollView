@@ -927,7 +927,10 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                     }
                     CGFloat needsath = ws.needsAnimatedToH.doubleValue;
                     ws.needsAnimatedToH = nil;
-                    if (!sf_uifloat_equal(needsath, ws.currDisplayH)) {
+                    // 保持既有 0.0001pt pending 判定：缓存高度和真实几何都在该范围内
+                    // 才说明首次布局后的待执行动画已经完成，无需再次发起滚动。
+                    if (!sf_uifloat_equal(needsath, ws.currDisplayH) ||
+                        !sf_uifloat_equal(needsath, [ws __currentDisplayHFromGeometry])) {
                         NSDictionary *toanisubinfo = ws.needsAnimatedToHSubInfo;
                         ws.needsAnimatedToHSubInfo = nil;
                         [ws scrollToDisplayH:needsath animated:YES subInfo:toanisubinfo completion:nil];
