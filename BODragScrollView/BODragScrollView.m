@@ -396,10 +396,11 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
 }
 
 /*
- 调用方必须位于 innerSetting: 保护范围内，并且已经先写入解析 frame。
- setEmbedViewFrame: 内部通过 center/frame 换算后仍可能产生 ULP 尾差；这里按
- frame.y += actualDisplayH - targetDisplayH 最多修正一次。一个物理像素只是
- “允许尝试修正”的准入范围；调用方随后必须从 model 几何复读真实结果。
+ 调用方必须位于 innerSetting: 保护范围内，且 targetDisplayH 是当前模型的权威目标。
+ 通常应先写入目标解析 frame；若没有重写 frame，则调用方必须已确认当前 offset
+ 精确位于该目标对应位置。这里按 frame.y += actualDisplayH - targetDisplayH 最多
+ 修正一次。一个物理像素只是“允许尝试修正”的准入范围；调用方随后必须从
+ model 几何复读真实结果。
  */
 - (void)__correctDisplayHResidualToTarget:(CGFloat)targetDisplayH {
     if (!_embedView || !isfinite(targetDisplayH)) {
@@ -2431,6 +2432,7 @@ static void *sf_observe_context = "sf_observe_context";
                 //未被边界截断时保留调用方给出的目标，不做无意义的减后再加。
                 validdisplayH = displayH;
             }
+            CGFloat finalDisplayH = validdisplayH;
             
             void (^doblock)(void) = ^{
                 if (animated) {
@@ -2477,7 +2479,13 @@ static void *sf_observe_context = "sf_observe_context";
                                 }
                             };
                         } else {
-                            //不需要变化，直接回调
+                            // offset 已经完全相同，不会产生异步滚动结束时机；只纠正
+                            // 小于一个物理像素的 panel frame 尾差，不写 contentOffset。
+                            [self innerSetting:^{
+                                [self __correctDisplayHResidualToTarget:finalDisplayH];
+                            }];
+                            // completion 仍读取纠正后复读到的真实几何，不直接发布目标值。
+                            self.currDisplayH = [self __currentDisplayHFromGeometry];
                             if (completion) {
                                 completion();
                             }
