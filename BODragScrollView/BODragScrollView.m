@@ -2239,6 +2239,29 @@ static void *sf_observe_context = "sf_observe_context";
     return _isScrollAnimating;
 }
 
+- (CGFloat)__minimumModelDisplayH {
+    // 与 layoutSubviews 建模规则保持一致，供边界截断后返回模型标准目标值。
+    // 不能用截断后的 offset 再加 bounds.height 反推，否则会重新产生浮点尾差。
+    if (self.attachDisplayHAr.count > 0) {
+        return self.attachDisplayHAr.firstObject.floatValue;
+    }
+    return self.minDisplayH ? self.minDisplayH.floatValue : 66;
+}
+
+- (CGFloat)__maximumModelDisplayH {
+    // 只在已完成布局、禁止底部 bounce 且 scrollTo 超过布局上限时使用。
+    // 这不是“最大不超过 panel 高度”的限制：存在吸附点时取最后一点，吸附点
+    // 可以高于 panel 自身高度；layoutSubviews 会通过正的 contentInset.bottom
+    // 保留 panel 底部越过 viewport 后露出的空白区域。没有吸附点时才沿用原
+    // maxdh 规则，取 minimumDisplayH 与已布局 panel 高度的较大值。
+    // 允许底部 bounce 时 scrollTo 不经过这项截断。
+    CGFloat minimumDisplayH = [self __minimumModelDisplayH];
+    if (self.attachDisplayHAr.count > 0) {
+        return MAX(minimumDisplayH, self.attachDisplayHAr.lastObject.floatValue);
+    }
+    return MAX(minimumDisplayH, CGRectGetHeight(self.embedView.frame));
+}
+
 - (NSNumber *)willLayoutToDisplayH {
     return _needsDisplayH;
 }
@@ -2358,10 +2381,16 @@ static void *sf_observe_context = "sf_observe_context";
             //如果滑动改的位置超过最大/最小值，且设置了不允许bounces，那么并不能滑动指定位置。这里做修正
             if (os.y < minosy && !self.allowBouncesCardTop) {
                 os.y = minosy;
+                // 使用模型最小值，避免 (displayH - sfh) + sfh 产生尾差。
+                validdisplayH = [self __minimumModelDisplayH];
             } else if (os.y > maxosy && !self.allowBouncesCardBottom) {
                 os.y = maxosy;
+                // 同上，边界截断后的终点由布局模型直接给出。
+                validdisplayH = [self __maximumModelDisplayH];
+            } else {
+                //未被边界截断时保留调用方给出的目标，不做无意义的减后再加。
+                validdisplayH = displayH;
             }
-            validdisplayH = os.y + sfh;
             
             void (^doblock)(void) = ^{
                 if (animated) {
