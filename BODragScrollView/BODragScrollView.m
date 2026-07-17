@@ -2323,8 +2323,11 @@ static void *sf_observe_context = "sf_observe_context";
                    animated:(BOOL)animated
                     subInfo:(NSDictionary *)subInfo
                  completion:(void (^ __nullable)(void))completion {
-    if (displayH == self.currDisplayH) {
-        //相同可以直接返回
+    if (displayH == self.currDisplayH &&
+        displayH == [self __currentDisplayHFromGeometry]) {
+        // 缓存值和真实几何都精确到位才直接返回：第二个条件防止尾差被旧缓存
+        // 掩盖；第一个条件保持 delayCallDisplayHChangeWhenAnimation 下的旧行为。
+        // 此处不能强写 currDisplayH，否则会绕过该属性原有的延迟更新语义。
         if (completion) {
             completion();
         }
