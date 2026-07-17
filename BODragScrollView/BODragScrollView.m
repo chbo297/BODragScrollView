@@ -90,6 +90,22 @@ static CGFloat sf_onePhysicalPixel(UIView *view) {
     return 1.f / MAX(scale, 1.f);
 }
 
+/*
+ 只消除局部模型值在端点附近严格小于 0.0001pt 的算术尾差；不裁剪范围，
+ 不写 UIScrollView 的真实 offset，也不能代替一个物理像素的场景归属判断。
+ */
+static CGFloat sf_modelValueBySnappingToNearestEndpoint(CGFloat value,
+                                                        CGFloat endpointA,
+                                                        CGFloat endpointB) {
+    CGFloat distanceA = fabs(value - endpointA);
+    CGFloat distanceB = fabs(value - endpointB);
+    CGFloat nearestEndpoint = distanceA <= distanceB ? endpointA : endpointB;
+    if (!sf_uifloat_equal(value, nearestEndpoint)) {
+        return value;
+    }
+    return nearestEndpoint;
+}
+
 static CGFloat sf_displayHeight(CGFloat viewportHeight,
                                 CGFloat contentOffsetY,
                                 CGRect embedViewFrame) {
@@ -1299,10 +1315,12 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
             
             CGFloat embedmints = MIN(sfh - maxdh, embedmaxts); //embed视图距离容器顶部的最小距离，可以是负的
             
-#define m_topext (embedcurrts - embedmaxts)
-#define m_topextinner (-innercursc)
-#define m_bottomext (embedmints - embedcurrts)
-#define m_bottomextinner (innercursc - innertotalsc)
+            // bounce 分配只在局部计算中把 0 附近的算术尾差归零；宏仍会随
+            // embedcurrts/innercursc 的转移动态重算，保持原有力量分配顺序。
+#define m_topext sf_modelValueBySnappingToNearestEndpoint((embedcurrts - embedmaxts), 0, 0)
+#define m_topextinner sf_modelValueBySnappingToNearestEndpoint((-innercursc), 0, 0)
+#define m_bottomext sf_modelValueBySnappingToNearestEndpoint((embedmints - embedcurrts), 0, 0)
+#define m_bottomextinner sf_modelValueBySnappingToNearestEndpoint((innercursc - innertotalsc), 0, 0)
             
             CGFloat topbounces = 0;
             CGFloat bottombounces = 0;
@@ -1388,6 +1406,11 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                     }
                 }
             }
+
+            // bounce 分配也可能经过多次加减，进入后续段模型前再次消除端点尾差。
+            innercursc = sf_modelValueBySnappingToNearestEndpoint(innercursc,
+                                                                   0,
+                                                                   innertotalsc);
             
             BOOL innerinfocomplete = NO; //初始化内部scrollView滑动是否完成
             
@@ -1464,6 +1487,9 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                     
                     if (findwhichidx < 0) {
                         CGFloat curinnerosy = innercursc - cinset.top;
+                        curinnerosy = sf_modelValueBySnappingToNearestEndpoint(curinnerosy,
+                                                                               infbegin,
+                                                                               infend);
                         if (infodh + onepxiel >= curmaydh) {
                             findwhichidx = innerdicidx;
                             
@@ -1566,13 +1592,16 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                     BOOL needssmartadd = NO;
                     if (self.prefDragInnerScroll) {
                         //指定从当前开始滑
-                        NSInteger theidx = bo_findIdxInFloatArrayByValue(theattachar, curmaydh, NO, NO);
-                        //上面已经判断了theattachar.count > 0，bo_findIdxInFloatArrayByValue返回的一定是合法值
+                        NSInteger theidx = bo_findIdxInFloatArrayByValue(theattachar, curmaydh, YES, NO);
                         CGFloat thedh = theattachar[theidx].floatValue;
-                        // 这是智能联动建模时的场景归属，不是当前高度的精确验收。
-                        // 一物理像素边界带内统一归属同一场景；实际 frame/offset
-                        // 仍使用 model 几何计算，不把吸附点值冒充当前高度。
+                        // 像素带内采用 nearby；带外恢复 floor 语义以构建相邻联动段。
                         BOOL currinattach = fabs(curmaydh - thedh) < onepxiel;
+                        if (!currinattach
+                            && thedh > curmaydh
+                            && theidx > 0) {
+                            theidx--;
+                            thedh = theattachar[theidx].floatValue;
+                        }
                         if (currinattach) {
                             //默认当前开始滑即可
                             needssmartadd = NO;
@@ -1648,7 +1677,14 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
 
                         CGFloat beginscdh = 0;
                         CGFloat totalinnerscdh = dyembedtosc + scheight;
-                        NSInteger theidx = bo_findIdxInFloatArrayByValue(theattachar, curmaydh, NO, YES);
+                        NSInteger theidx = bo_findIdxInFloatArrayByValue(theattachar, curmaydh, YES, YES);
+                        CGFloat nearbydh = theattachar[theidx].floatValue;
+                        // 像素带内采用 nearby；带外恢复 ceil 语义作为向上搜索起点。
+                        if (fabs(curmaydh - nearbydh) >= onepxiel
+                            && nearbydh < curmaydh
+                            && theidx + 1 < theattachar.count) {
+                            theidx++;
+                        }
                         CGFloat minshowrate = 0.7; //滑动内部时，内部至少展示70%（视觉友好），这个数值根据需要再调吧
                         for (NSInteger uidx = theidx; uidx < theattachar.count; uidx++) {
                             CGFloat thedh = theattachar[uidx].floatValue;
@@ -2833,7 +2869,8 @@ static void *sf_observe_context = &sf_observe_context;
                 BODragScrollAttachInfo innerscinfo = _innerSVAttInfAr[infoidx];
                 UIScrollView *theinfosv = [self __obtainScrollViewWithIdx:innerscinfo.scrollViewIdx];
                 // 原模型允许在段起点前一个物理像素提前进入边界判断，因此下面的
-                // segmentOffset 可能为负；不要在这里 clamp，否则会改变原有交接手感。
+                // segmentOffset 可能为负；不能按像素带 clamp，避免改变原有交接手感。
+                // 仅在真正计算时消除严格小于 0.0001pt 的端点算术尾差。
                 if (offsety + sf_onePhysicalPixel(self) >= innerscinfo.dragSVOffsetY) {
                     CGFloat segmentLength = innerscinfo.innerOffsetB - innerscinfo.innerOffsetA;
                     if (infoidx + 1 < _innerSVAttInfCount) {
@@ -2864,6 +2901,11 @@ static void *sf_observe_context = &sf_observe_context;
                     // 不是 0...1 比例。负值来自上方刻意保留的一像素边界带；段尾
                     // 也继续走原分支，不额外 clamp 或改变越界行为。
                     CGFloat segmentOffset = offsety - innerscinfo.dragSVOffsetY;
+                    // 系统真实 offset 保持不变；仅让本次模型计算把端点附近的
+                    // 0.0001pt 内算术尾差视为精确的 0/segmentLength。
+                    segmentOffset = sf_modelValueBySnappingToNearestEndpoint(segmentOffset,
+                                                                              0,
+                                                                              segmentLength);
                     if (segmentOffset > segmentLength) {
                         //超过了
                         cursclength += segmentLength;
@@ -3962,6 +4004,11 @@ static void *sf_observe_context = &sf_observe_context;
     if (innertotalsc <= 0) {
         return NO;
     }
+
+    // 手势优先级只使用规范后的局部进度；不改写内部 scrollView 的真实 offset。
+    innercursc = sf_modelValueBySnappingToNearestEndpoint(innercursc,
+                                                           0,
+                                                           innertotalsc);
     
     if (innercursc < 0
         || innercursc > innertotalsc) {
