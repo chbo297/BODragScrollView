@@ -924,7 +924,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                     if (nil == ws.needsAnimatedToH) {
                         return;
                     }
-                    CGFloat needsath = ws.needsAnimatedToH.floatValue;
+                    CGFloat needsath = ws.needsAnimatedToH.doubleValue;
                     ws.needsAnimatedToH = nil;
                     if (!sf_uifloat_equal(needsath, ws.currDisplayH)) {
                         NSDictionary *toanisubinfo = ws.needsAnimatedToHSubInfo;
@@ -942,7 +942,7 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                              ((nil != self.minDisplayH) ? self.minDisplayH.floatValue : 66));
             if (nil != _needsDisplayH) {
                 //有预置值
-                displayh = _needsDisplayH.floatValue;
+                displayh = _needsDisplayH.doubleValue;
                 _needsDisplayH = nil;
             } else {
                 if (newlayoutembed) {
