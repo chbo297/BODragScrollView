@@ -3556,7 +3556,10 @@ static void *sf_observe_context = "sf_observe_context";
         
     } else if (UIAccessibilityScrollDirectionUp == direction) {
         if (self.attachDisplayHAr.count > 0) {
-            if (self.currDisplayH == self.attachDisplayHAr.lastObject.floatValue) {
+            // 这里判断的是 accessibility 应由面板还是内部 scrollView 响应的场景，
+            // 严格小于一个物理像素的边界带只用于防止浮点尾差破坏场景归属。
+            CGFloat highestAttachDisplayH = self.attachDisplayHAr.lastObject.floatValue;
+            if (fabs(self.currDisplayH - highestAttachDisplayH) < sf_onePhysicalPixel(self)) {
                 //若代理未显示告知_currentScrollView不处理，对_currentScrollView进行只能判定
                 if (nil == dacontrol) {
                     if (!_currentScrollView) {
