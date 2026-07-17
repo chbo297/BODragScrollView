@@ -76,8 +76,7 @@ typedef struct BODragScrollAttachInfo {
     CGFloat dragSVOffsetY2;
 } BODragScrollAttachInfo;
 
-// 一个物理像素用于离散场景和边界归属。纠正已知模型高度的几何尾差时，
-// 它也只是“允许尝试纠正”的准入边界，不代表公开高度允许存在一个像素误差。
+// 一个物理像素只用于离散场景和边界归属，不代表公开高度允许存在一个像素误差。
 // 不缓存 mainScreen.scale：view 可能位于外接屏幕，移动后也应使用当前屏幕的 scale。
 static CGFloat sf_onePhysicalPixel(UIView *view) {
     CGFloat scale = view.window.screen.scale;
@@ -412,30 +411,28 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
 }
 
 /*
- 调用方必须位于 innerSetting: 保护范围内，且 targetDisplayH 是当前模型的权威目标。
- 通常应先写入目标解析 frame；若没有重写 frame，则调用方必须已确认当前 offset
- 精确位于该目标对应位置。这里按 frame.y += actualDisplayH - targetDisplayH 最多
- 修正一次。一个物理像素只是“允许尝试修正”的准入范围；调用方随后必须从
- model 几何复读真实结果。
+ 仅当真实几何与现有模型边界相差严格小于 0.0001pt 时，返回模型中已经存在的
+ 精确边界值。它不按一个物理像素吸附，不处理连续移动中的近似值，也不写 frame。
+ 这样 UIKit 的 frame/center 表示尾差不会进入下一轮模型继续参与计算。
  */
-- (void)__correctDisplayHResidualToTarget:(CGFloat)targetDisplayH {
-    if (!_embedView || !isfinite(targetDisplayH)) {
-        return;
+- (CGFloat)__displayHBySnappingToKnownModelBoundary:(CGFloat)displayH {
+    if (!isfinite(displayH)) {
+        return displayH;
     }
 
-    CGFloat displayH = [self __currentDisplayHFromGeometry];
-    if (!isfinite(displayH) || displayH == targetDisplayH) {
-        return;
+    if (self.attachDisplayHAr.count > 0) {
+        NSInteger idx = bo_findIdxInFloatArrayByValue(self.attachDisplayHAr,
+                                                       displayH,
+                                                       YES,
+                                                       NO);
+        CGFloat boundary = self.attachDisplayHAr[idx].floatValue;
+        return sf_uifloat_equal(displayH, boundary) ? boundary : displayH;
     }
 
-    CGFloat residual = displayH - targetDisplayH;
-    if (fabs(residual) >= sf_onePhysicalPixel(self)) {
-        return;
-    }
-
-    CGRect embedFrame = _embedView.frame;
-    embedFrame.origin.y += residual;
-    [self setEmbedViewFrame:embedFrame];
+    CGFloat minimum = self.minDisplayH ? self.minDisplayH.floatValue : 66;
+    CGFloat maximum = MAX(minimum,
+                          _embedView ? CGRectGetHeight(_embedView.frame) : minimum);
+    return sf_modelValueBySnappingToNearestEndpoint(displayH, minimum, maximum);
 }
 
 - (instancetype)initWithFrame:(CGRect)frame {
@@ -1030,13 +1027,12 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
             
             [self forceReloadCurrInnerScrollView];
             
-            // forceReload 可能再次调整联动几何，因此在它结束后，才按 layout 已知的
-            // displayh 纠正小于一个物理像素的 frame 尾差。该写入仍受 innerSetting 保护。
-            [self innerSetting:^{
-                [self __correctDisplayHResidualToTarget:displayh];
-            }];
-            // 无论是否能 bit-exact 收口，都只发布纠正后复读到的真实几何。
-            self.currDisplayH = [self __currentDisplayHFromGeometry];
+            // forceReload 可能再次调整联动几何。复读最终几何，但 layout 已明确知道
+            // 本次应保持的 displayh；只有严格的算术尾差才回归该模型值，不再次写 frame。
+            CGFloat actualDisplayH = [self __currentDisplayHFromGeometry];
+            self.currDisplayH = sf_uifloat_equal(actualDisplayH, displayh)
+            ? displayh
+            : actualDisplayH;
         } else {
             [self innerSetting:^{
                 self.bo_contentInset = UIEdgeInsetsZero;
@@ -1415,6 +1411,9 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
             BOOL innerinfocomplete = NO; //初始化内部scrollView滑动是否完成
             
             CGFloat curmaydh = (sfh - embedcurrts); //计算完后当前展示高度
+            // 建模入口只消除已知配置边界附近的算术尾差，避免 frame/offset 往返后的
+            // ULP 残差成为新模型的起点；连续高度及一个物理像素场景判断保持原样。
+            curmaydh = [self __displayHBySnappingToKnownModelBoundary:curmaydh];
             if (scinnerinfoar.count > 0) {
                 //若指定了内部的滑动行为
                 
@@ -1454,6 +1453,12 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
                     CGFloat infodh = dhval.floatValue;
                     CGFloat infbegin = beginval.floatValue;
                     CGFloat infend = endval.floatValue;
+
+                    // 自定义内部滑动段的 displayH 也是权威模型边界，但不一定存在于
+                    // attachDisplayHAr 中；仅在严格算术尾差内归回该自定义值。
+                    if (sf_uifloat_equal(curmaydh, infodh)) {
+                        curmaydh = infodh;
+                    }
                     
                     //有效判断,不需要判断了吧 浪费资源 由外部保障传入即可
                     //                    if (infend <= infbegin) {
@@ -2519,13 +2524,13 @@ static void *sf_observe_context = &sf_observe_context;
                                 }
                             };
                         } else {
-                            // offset 已经完全相同，不会产生异步滚动结束时机；只纠正
-                            // 小于一个物理像素的 panel frame 尾差，不写 contentOffset。
-                            [self innerSetting:^{
-                                [self __correctDisplayHResidualToTarget:finalDisplayH];
-                            }];
-                            // completion 仍读取纠正后复读到的真实几何，不直接发布目标值。
-                            self.currDisplayH = [self __currentDisplayHFromGeometry];
+                            // offset 已经完全相同，不会产生异步滚动结束时机。复读真实
+                            // 几何，只在它与本次明确目标相差严格小于 0.0001pt 时发布
+                            // 目标值；不再尝试通过 frame/center 往返追逐 ULP 尾差。
+                            CGFloat actualDisplayH = [self __currentDisplayHFromGeometry];
+                            self.currDisplayH = sf_uifloat_equal(actualDisplayH, finalDisplayH)
+                            ? finalDisplayH
+                            : actualDisplayH;
                             if (completion) {
                                 completion();
                             }
@@ -2801,10 +2806,11 @@ static void *sf_observe_context = &sf_observe_context;
         return;
     }
     BOOL isinnersc = NO;
-    // 仅在 outer offset 真正进入内部联动段后成立；用于把 panel frame
-    // 直接解析到该段定义的固定 displayH，避免累计距离反算产生浮点尾差。
-    BOOL hasFixedDisplayH = NO;
-    CGFloat fixedDisplayH = 0;
+    // 当前分支若数学上要求展示高度固定，则同时从模型解析 frame 和 displayH。
+    // 这里只保存本次回调的局部结果，不形成第二套持久高度状态。
+    BOOL hasKnownDisplayH = NO;
+    CGFloat knownDisplayH = 0;
+    CGFloat viewportHeight = CGRectGetHeight(self.bounds);
     CGFloat innertotalsc = _totalScrollInnerOSy;
     BOOL triggerinner = NO;
     //暂时不用这个属性，后续有需求可能会用
@@ -2823,7 +2829,7 @@ static void *sf_observe_context = &sf_observe_context;
             }
         }
         CGFloat minosy = -self.contentInset.top;
-        CGFloat maxosy = MAX(self.contentSize.height + self.contentInset.bottom - CGRectGetHeight(self.bounds),
+        CGFloat maxosy = MAX(self.contentSize.height + self.contentInset.bottom - viewportHeight,
                              -self.contentInset.top);
         
         CGRect embedf = _embedView.frame;
@@ -2839,8 +2845,14 @@ static void *sf_observe_context = &sf_observe_context;
                 innershouldosy = innerminosy;
                 embedf.origin.y = 0;
             } else {
+                // 当前已生效模型的顶部边界；严格尾差内再归回配置值，可兼容
+                // forceBouncesInnerTop 临时收窄后的 attach 范围。
+                CGFloat minimumBoundaryDisplayH =
+                [self __displayHBySnappingToKnownModelBoundary:(viewportHeight + minosy)];
                 if (_currentScrollView.bounces) {
                     innershouldosy = innerminosy - topext;
+                    hasKnownDisplayH = YES;
+                    knownDisplayH = minimumBoundaryDisplayH;
                     embedf.origin.y = -topext;
                     
                     isinnersc = YES;
@@ -2853,6 +2865,8 @@ static void *sf_observe_context = &sf_observe_context;
                     [self innerSetting:^{
                         self.bo_contentOffset = co;
                     }];
+                    hasKnownDisplayH = YES;
+                    knownDisplayH = minimumBoundaryDisplayH;
                     isinnersc = NO;
                 }
             }
@@ -2935,15 +2949,14 @@ static void *sf_observe_context = &sf_observe_context;
                         // 才标记正在滑内部。固定高度则从段起点（含 0）开始生效。
                         isinnersc = (segmentOffset > 0);
                         if (segmentOffset >= 0 && isfinite(innerscinfo.displayH)) {
-                            hasFixedDisplayH = YES;
-                            fixedDisplayH = innerscinfo.displayH;
+                            hasKnownDisplayH = YES;
+                            knownDisplayH = innerscinfo.displayH;
                         }
                     }
-                    // 非内部联动段仍沿用原累计距离；真正位于联动段时，两式在实数
-                    // 数学上等价。解析式直接按模型固定高度求 frame，真实写入后的
-                    // ULP 尾差在下方再收口。
-                    embedf.origin.y = hasFixedDisplayH
-                    ? CGRectGetHeight(self.bounds) + offsety - fixedDisplayH
+                    // 非内部联动段仍沿用原累计距离；固定高度段则从当前真实 offset
+                    // 和模型高度绝对解析 frame，不使用上一帧 frame 或累计残差。
+                    embedf.origin.y = hasKnownDisplayH
+                    ? viewportHeight + offsety - knownDisplayH
                     : cursclength;
                     findtheinfo = YES;
                     break;
@@ -2978,7 +2991,11 @@ static void *sf_observe_context = &sf_observe_context;
                 innershouldosy = innermaxosy;
             } else {
                 //bounces内部
+                CGFloat maximumBoundaryDisplayH =
+                [self __displayHBySnappingToKnownModelBoundary:(viewportHeight + maxosy - innertotalsc)];
                 if (_currentScrollView.bounces) {
+                    hasKnownDisplayH = YES;
+                    knownDisplayH = maximumBoundaryDisplayH;
                     embedf.origin.y = innertotalsc + bottomext;
                     innershouldosy = innermaxosy + bottomext;
                     
@@ -2994,6 +3011,8 @@ static void *sf_observe_context = &sf_observe_context;
                     [self innerSetting:^{
                         self.bo_contentOffset = co;
                     }];
+                    hasKnownDisplayH = YES;
+                    knownDisplayH = maximumBoundaryDisplayH;
                 }
             }
         }
@@ -3005,13 +3024,9 @@ static void *sf_observe_context = &sf_observe_context;
         CGPoint inneroffset = _currentScrollView.contentOffset;
         inneroffset.y = innershouldosy;
         [self innerSetting:^{
-            // 保持原实现要求的顺序：先写 panel frame，最后写内部 scroll offset。
-            // 固定段的残差只能在第一次真实 frame 写入后计算，因此夹在两者之间；
-            // 三步都处于同一个 innerSetting 保护范围，避免中间状态触发自身滚动逻辑。
+            // 保持原实现要求的顺序：先写 panel frame，最后写内部 scroll offset；
+            // 两步处于同一个 innerSetting 保护范围，避免中间状态触发自身滚动逻辑。
             [self setEmbedViewFrame:embedf];
-            if (hasFixedDisplayH) {
-                [self __correctDisplayHResidualToTarget:fixedDisplayH];
-            }
             if (0 == self->_missAttachAndNeedsReload) {
                 [self setCurrentSVContentOffset:inneroffset];
             }
@@ -3025,16 +3040,22 @@ static void *sf_observe_context = &sf_observe_context;
         CGFloat coy = self.contentOffset.y;
         CGFloat minosy = -self.contentInset.top;
         CGFloat maxosy =\
-        MAX(minosy, self.contentSize.height + self.contentInset.bottom - CGRectGetHeight(self.bounds));
+        MAX(minosy, self.contentSize.height + self.contentInset.bottom - viewportHeight);
         CGRect embedf = _embedView.frame;
         if (coy > maxosy && !self.allowBouncesCardBottom) {
             isbounces = YES;
+            hasKnownDisplayH = YES;
+            knownDisplayH =
+            [self __displayHBySnappingToKnownModelBoundary:(viewportHeight + maxosy)];
             embedf.origin.y = coy - maxosy;
             [self innerSetting:^{
                 [self setEmbedViewFrame:embedf];
             }];
         } else if (coy < minosy && !self.allowBouncesCardTop) {
             isbounces = YES;
+            hasKnownDisplayH = YES;
+            knownDisplayH =
+            [self __displayHBySnappingToKnownModelBoundary:(viewportHeight + minosy)];
             embedf.origin.y = coy - minosy;
             [self innerSetting:^{
                 [self setEmbedViewFrame:embedf];
@@ -3065,7 +3086,13 @@ static void *sf_observe_context = &sf_observe_context;
         }
     }
     
-    CGFloat newdh = [self __currentDisplayHFromGeometry];
+    CGFloat actualDisplayH = [self __currentDisplayHFromGeometry];
+    // 只有当前分支已经证明高度数学上固定，并且真实几何只差严格的算术尾差时，
+    // 才发布模型中的精确值。差异更大时保留真实值，避免掩盖布局或模型错误。
+    CGFloat newdh = (hasKnownDisplayH &&
+                     sf_uifloat_equal(actualDisplayH, knownDisplayH))
+    ? knownDisplayH
+    : actualDisplayH;
     
     //滑动外部时使用DecelerationRateFast
     if (scrollView.bods_isTracking) {
