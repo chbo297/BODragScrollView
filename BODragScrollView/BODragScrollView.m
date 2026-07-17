@@ -2565,7 +2565,9 @@ static void *sf_observe_context = "sf_observe_context";
     //排序
     _attachDisplayHAr =\
     [attachDisplayHAr sortedArrayUsingComparator:^NSComparisonResult(NSNumber *  _Nonnull obj1, NSNumber *  _Nonnull obj2) {
-        return obj1.floatValue - obj2.floatValue;
+        // comparator 必须返回明确的三态结果；直接返回浮点差会隐式转换为整数，
+        // 使差值不足 1pt 的两个吸附点被错误地当成 NSOrderedSame。
+        return [obj1 compare:obj2];
     }];
     
     //attachDisplayHAr改变后，可展示的最小、最大高度可能会变化，contentinse有可能需要变化
