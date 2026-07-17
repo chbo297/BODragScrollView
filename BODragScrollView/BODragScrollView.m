@@ -2114,7 +2114,8 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
 }
 
 #pragma mark - 监听内部scrollView的contentSize、contentInset、frame的变化
-static void *sf_observe_context = "sf_observe_context";
+// KVO context 是不透明的身份 token，只能比较指针，不能读取其指向的内容。
+static void *sf_observe_context = &sf_observe_context;
 
 - (void)__addObserveForSc:(UIScrollView *)scrollView {
     if (!scrollView) {
@@ -2180,7 +2181,7 @@ static void *sf_observe_context = "sf_observe_context";
 #endif
     }
     
-    if (0 == memcmp(context, sf_observe_context, strlen(sf_observe_context))) {
+    if (context == sf_observe_context) {
         if (object == _currentScrollView) {
             if ([keyPath isEqualToString:@"contentSize"] &&
                 CGSizeEqualToSize(_currentScrollView.contentSize, _lastInnerSCSize)) {
