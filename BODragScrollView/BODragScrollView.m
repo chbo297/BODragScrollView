@@ -3607,6 +3607,8 @@ static void *sf_observe_context = "sf_observe_context";
                          withVelocity:velocity
                   targetContentOffset:targetContentOffset
                            attachInfo:&theinfo];
+    // 保存组件及内部 scroll delegate 算出的目标，用于识别外部 delegate 是否改写。
+    CGFloat componentTargetOffsetY = (*targetContentOffset).y;
     
     if (self.dragScrollDelegate && [self.dragScrollDelegate respondsToSelector:@selector(scrollViewWillEndDragging:withVelocity:targetContentOffset:)]) {
         [self.dragScrollDelegate scrollViewWillEndDragging:scrollView
@@ -3615,8 +3617,16 @@ static void *sf_observe_context = "sf_observe_context";
     }
     
     CGFloat dragoutdy = (*targetContentOffset).y;
+    // 只有组件选出的、未被外部 delegate 改写的精确段端点，才能直接采用
+    // 模型 displayH；自定义目标继续按真实 target offset 投影。
+    BOOL isKnownAttachTarget =
+    (0 != scrolltype &&
+     dragoutdy == componentTargetOffsetY &&
+     (dragoutdy == theinfo.dragSVOffsetY || dragoutdy == theinfo.dragSVOffsetY2));
     CGFloat newdh;
-    if (0 != scrolltype && _innerSVAttInfCount > 0) {
+    if (isKnownAttachTarget) {
+        newdh = theinfo.displayH;
+    } else if (0 != scrolltype && _innerSVAttInfCount > 0) {
         if (dragoutdy < theinfo.dragSVOffsetY) {
             newdh = theinfo.displayH - theinfo.dragSVOffsetY + dragoutdy;
         } else if (dragoutdy <= theinfo.dragSVOffsetY2) {
