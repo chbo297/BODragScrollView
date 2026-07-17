@@ -76,8 +76,8 @@ typedef struct BODragScrollAttachInfo {
     CGFloat dragSVOffsetY2;
 } BODragScrollAttachInfo;
 
-// 一个物理像素用于离散场景和边界归属，仅作为防抖边界带，
-// 不代表当前展示高度或公开接口允许存在一个像素误差。
+// 一个物理像素用于离散场景和边界归属。纠正已知模型高度的几何尾差时，
+// 它也只是“允许尝试纠正”的准入边界，不代表公开高度允许存在一个像素误差。
 // 不缓存 mainScreen.scale：view 可能位于外接屏幕，移动后也应使用当前屏幕的 scale。
 static CGFloat sf_onePhysicalPixel(UIView *view) {
     CGFloat scale = view.window.screen.scale;
@@ -393,6 +393,32 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
     return sf_displayHeight(CGRectGetHeight(self.bounds),
                             self.contentOffset.y,
                             _embedView.frame);
+}
+
+/*
+ 调用方必须位于 innerSetting: 保护范围内，并且已经先写入解析 frame。
+ setEmbedViewFrame: 内部通过 center/frame 换算后仍可能产生 ULP 尾差；这里按
+ frame.y += actualDisplayH - targetDisplayH 最多修正一次。一个物理像素只是
+ “允许尝试修正”的准入范围；调用方随后必须从 model 几何复读真实结果。
+ */
+- (void)__correctDisplayHResidualToTarget:(CGFloat)targetDisplayH {
+    if (!_embedView || !isfinite(targetDisplayH)) {
+        return;
+    }
+
+    CGFloat displayH = [self __currentDisplayHFromGeometry];
+    if (!isfinite(displayH) || displayH == targetDisplayH) {
+        return;
+    }
+
+    CGFloat residual = displayH - targetDisplayH;
+    if (fabs(residual) >= sf_onePhysicalPixel(self)) {
+        return;
+    }
+
+    CGRect embedFrame = _embedView.frame;
+    embedFrame.origin.y += residual;
+    [self setEmbedViewFrame:embedFrame];
 }
 
 - (instancetype)initWithFrame:(CGRect)frame {
@@ -2720,6 +2746,10 @@ static void *sf_observe_context = "sf_observe_context";
         return;
     }
     BOOL isinnersc = NO;
+    // 仅在 outer offset 真正进入内部联动段后成立；用于把 panel frame
+    // 直接解析到该段定义的固定 displayH，避免累计距离反算产生浮点尾差。
+    BOOL hasFixedDisplayH = NO;
+    CGFloat fixedDisplayH = 0;
     CGFloat innertotalsc = _totalScrollInnerOSy;
     BOOL triggerinner = NO;
     //暂时不用这个属性，后续有需求可能会用
@@ -2843,8 +2873,17 @@ static void *sf_observe_context = "sf_observe_context";
                         // segmentOffset == 0 仍是 outer 到 inner 的边界；只有大于 0
                         // 才标记正在滑内部。固定高度则从段起点（含 0）开始生效。
                         isinnersc = (segmentOffset > 0);
+                        if (segmentOffset >= 0 && isfinite(innerscinfo.displayH)) {
+                            hasFixedDisplayH = YES;
+                            fixedDisplayH = innerscinfo.displayH;
+                        }
                     }
-                    embedf.origin.y = cursclength;
+                    // 非内部联动段仍沿用原累计距离；真正位于联动段时，两式在实数
+                    // 数学上等价。解析式直接按模型固定高度求 frame，真实写入后的
+                    // ULP 尾差在下方再收口。
+                    embedf.origin.y = hasFixedDisplayH
+                    ? CGRectGetHeight(self.bounds) + offsety - fixedDisplayH
+                    : cursclength;
                     findtheinfo = YES;
                     break;
                 }
@@ -2905,8 +2944,13 @@ static void *sf_observe_context = "sf_observe_context";
         CGPoint inneroffset = _currentScrollView.contentOffset;
         inneroffset.y = innershouldosy;
         [self innerSetting:^{
-            //要先设EmbedViewFrame再setCurrentSVContentOffset，否则setCurrentSVContentOffset可能引起系统的重新布局矫正CurrentSV的ContentOffset
+            // 保持原实现要求的顺序：先写 panel frame，最后写内部 scroll offset。
+            // 固定段的残差只能在第一次真实 frame 写入后计算，因此夹在两者之间；
+            // 三步都处于同一个 innerSetting 保护范围，避免中间状态触发自身滚动逻辑。
             [self setEmbedViewFrame:embedf];
+            if (hasFixedDisplayH) {
+                [self __correctDisplayHResidualToTarget:fixedDisplayH];
+            }
             if (0 == self->_missAttachAndNeedsReload) {
                 [self setCurrentSVContentOffset:inneroffset];
             }
