@@ -55,7 +55,10 @@ static UIEdgeInsets sf_common_contentInset(UIScrollView * __nonnull scrollView) 
     }
 }
 
-#define sf_uifloat_equal(a, b) (fabs(a - b) <= 0.01)
+// 普通浮点近似相等：只忽略严格小于 0.0001pt 的差值。
+// 它不控制系统 delegate 回调次数，也不能替代物理像素场景边界或已知终点精确值。
+// delegate 回调中仅 displayHDidChange 可使用；didScroll 和 target 事件均不依据数值去重。
+#define sf_uifloat_equal(a, b) (fabs((a) - (b)) < 0.0001)
 
 #define sf_indictor_tag (9919)
 
@@ -337,6 +340,8 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
     BOOL _ignoreWaitDidTargetTo; //在内部设置时忽视_waitDidTargetTo
     BOOL _waitMayAnimationScroll;
     void (^_animationScrollDidEndBlock)(void);
+    // 自定义 displayHDidChange 的变化判定基线。当前 model 几何值仍逐次精确存储。
+    CGFloat _displayHChangeBaseline;
     
     //辅助运算
     CGFloat _minScrollInnerOSy; //捕获内部sc的可滑动最小Offsety
@@ -354,8 +359,6 @@ static void bo_swizzleMethod(Class cls, SEL originalSelector, SEL swizzledSelect
     __weak UIControl *_theCtrWhenDecInner; //decelerating时点击了某UIControl，为了不使scrollView的系统机制无效其点击事件，手动传递action
     BOOL _lastScrollIsInner; //最后一次滑动位置变化（包括内外），是否是捕获的内部sv
     NSValue *_scrollBeganLoc; //滑动开始的点
-    NSNumber *_dragBeganDH; //滑动开始的展示高度
-    BOOL _dragDHHasChange; //从拖拽起始，到终止，展示高度是否发生过变化（即使起终点相同，中间变化过也算）
     BODragScrollTapGes *_dsTapGes;
     
     //触发内部scrollView时会切换到内部scrollView的rate，用该处存储自己的的rate
@@ -2218,17 +2221,20 @@ static void *sf_observe_context = "sf_observe_context";
 }
 
 - (void)setCurrDisplayH:(CGFloat)currDisplayH {
-    
-    if (!sf_uifloat_equal(_currDisplayH, currDisplayH)) {
+    // 凡进入 setter 的正常/自然滚动路径都逐次保存 model 几何，不再被近似相等
+    // 阈值截断；UIView 动画配置 delayCallDisplayHChangeWhenAnimation 时仍沿用原来的
+    // 延迟更新时机。0.0001pt 仅用于自定义值变化回调去重。
+    if (_currDisplayH != currDisplayH) {
         _currDisplayH = currDisplayH;
-        
-        //有手势拖拽的起点，表示实在拖拽过程中，标记高度发生变化
-        if (nil != _dragBeganDH
-            && !_dragDHHasChange) {
-            _dragDHHasChange = YES;
+        // 与通知基线比较而不是上一帧 model 值：多个不足 0.0001pt 的小变化
+        // 可以累计到一次回调，不会永久丢失微小的连续变化。
+        BOOL shouldNotify = !sf_uifloat_equal(_displayHChangeBaseline, currDisplayH);
+        if (shouldNotify) {
+            _displayHChangeBaseline = currDisplayH;
         }
-        
-        if (self.dragScrollDelegate &&
+
+        if (shouldNotify &&
+            self.dragScrollDelegate &&
             [self.dragScrollDelegate respondsToSelector:@selector(dragScrollView:displayHDidChange:)]) {
             [self.dragScrollDelegate dragScrollView:self displayHDidChange:_currDisplayH];
         }
@@ -2944,8 +2950,10 @@ static void *sf_observe_context = "sf_observe_context";
         self.autoShowInnerIndictor) {
         for (UIView *subv in _currentScrollView.subviews) {
             
+            // 这里不是普通浮点相等，而是对 UIKit 私有 indicator 尺寸的启发式识别；
+            // 保留独立的 0.01pt 容差，避免系统布局细节变化导致 indicator 识别失效。
             if ([subv isKindOfClass:[UIImageView class]] &&
-                sf_uifloat_equal(subv.frame.size.width, 2.5)) {
+                fabs(subv.frame.size.width - 2.5) < 0.01) {
                 subv.alpha = 1;
                 subv.tag = sf_indictor_tag;
             }
@@ -3485,8 +3493,9 @@ static void *sf_observe_context = "sf_observe_context";
                                                   withVelocity:velocity
                                            targetContentOffset:&inostarget];
         //目前暂定：本身落点在内部时，才会受内部targetContentOffset修改的影响，若本身落点不在内部，则不被内部的设置干扰
+        // currinnertarget 刚直接写入 inostarget.y；delegate 返回后任何差异都是其显式改写，不做阈值过滤。
         if ((11 == scrolltype || 21 == scrolltype) &&
-            !sf_uifloat_equal(currinnertarget, inostarget.y)) {
+            currinnertarget != inostarget.y) {
             //数值被修改了，校验合法性
             CGFloat outtargety = inostarget.y  + innerinsets.top + _minScrollInnerOSy;
             NSInteger outtarloc = -1;
@@ -3644,30 +3653,23 @@ static void *sf_observe_context = "sf_observe_context";
         newdh = [self __displayHForDragOffsetY:dragoutdy];
     }
     
-    BOOL willdecelerate =\
-    (!sf_uifloat_equal((*targetContentOffset).y, self.contentOffset.y));
+    // targetContentOffset 与当前 offset 都是本次系统回调的直接值；任何差异都表示
+    // 系统存在实际目标移动，不能用近似阈值改变动画接管与后续回调路径。
+    BOOL targetWillMove = ((*targetContentOffset).y != self.contentOffset.y);
     
-    NSString *reason = [NSString stringWithFormat:@"willEndDragging%@", willdecelerate ? @"-willdecelerate" : @""];
-    //整个drag过程中，displayHeight没发生过变化，则不用触发TargetTo
-    
-    //中间没有变化，且结果也不会变化，不需要发target变化的回调
-    BOOL ignoretargetto = !_dragDHHasChange && sf_uifloat_equal(newdh, _dragBeganDH.floatValue);
-    //恢复拖拽相关标记位
-    _dragBeganDH = nil;
-    _dragDHHasChange = NO;
-    
-    if (!ignoretargetto) {
-        if (self.dragScrollDelegate &&
-            [self.dragScrollDelegate respondsToSelector:@selector(dragScrollView:willTargetToH:reason:)]) {
-            [self.dragScrollDelegate dragScrollView:self
-                                      willTargetToH:newdh
-                                             reason:reason];
-        }
-        
-        _waitDidTargetTo = YES;
+    NSString *reason = [NSString stringWithFormat:@"willEndDragging%@", targetWillMove ? @"-willdecelerate" : @""];
+
+    // willTargetToH 表示本次手势结束产生了一次滑动意图，不是高度变化通知。
+    // 即使目标高度与当前高度相同，也应按系统 willEndDragging 事件如实回调。
+    if (self.dragScrollDelegate &&
+        [self.dragScrollDelegate respondsToSelector:@selector(dragScrollView:willTargetToH:reason:)]) {
+        [self.dragScrollDelegate dragScrollView:self
+                                  willTargetToH:newdh
+                                         reason:reason];
     }
+    _waitDidTargetTo = YES;
     
-    if (22 == scrolltype && willdecelerate) {
+    if (22 == scrolltype && targetWillMove) {
         //外部滑向外部才需要选择动画
         BODragScrollDecelerateStyle anisel = self.defaultDecelerateStyle;
         if (self.dragScrollDelegate &&
@@ -3806,12 +3808,6 @@ static void *sf_observe_context = "sf_observe_context";
 
 - (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView {
     _scrollBeganLoc = @([scrollView.panGestureRecognizer locationInView:scrollView.window]);
-    /*
-     拖拽起始时的展示高度
-     */
-    _dragBeganDH = @(_currDisplayH);
-    _dragDHHasChange = NO;
-    
     if (_needsFixDisplayHWhenTouchEnd) {
         //开始响应手势滑动了，自会在滑动结束后重置位置，不需要_dsTapGes的抬起修正了
         _needsFixDisplayHWhenTouchEnd = NO;

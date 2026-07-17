@@ -48,7 +48,7 @@ FOUNDATION_EXTERN NSInteger bo_findIdxInFloatArrayByValue(NSArray<NSNumber *> *a
           willShowHeight:(CGFloat *)willShowHeight;
 
 /*
- 所有情况下子视图展示高度发生变化都会回调，包括布局变化、手势滑动、被调用scrollToDisplayH:animated:
+ 仅在子视图展示高度发生变化时回调，包括布局变化、手势滑动、被调用scrollToDisplayH:animated:
  @displayH 子视图的展示出的高度
  */
 - (void)dragScrollView:(BODragScrollView *)dragScrollView
@@ -56,6 +56,7 @@ FOUNDATION_EXTERN NSInteger bo_findIdxInFloatArrayByValue(NSArray<NSNumber *> *a
 
 /*
  scrollview发生了滑动时的回调，手势、scrollToDisplayH:animated:都会触发
+ 本回调跟随滚动事件触发，即使展示高度没有变化也会回调
  @displayH 子视图的展示出的高度
  @isInner 当前滑动是否embed内部的scrollView
  */
@@ -98,6 +99,7 @@ FOUNDATION_EXTERN NSInteger bo_findIdxInFloatArrayByValue(NSArray<NSNumber *> *a
 /*
  有些业务需要提前获得scrollview即将滑动的目标位置
  调用scrollToDisplayH:animated:、手势离开屏幕scrollview即将停止/惯性的时机会调用
+ 这是滑动意图与完成事件回调，即使height与当前值相同也会按事件回调
  willTargetToH只代表当前滑动的意图，随后，滑动意图有可能被手势、点击等中断
  didTargetToH代表每个意图最终完成时的展示高度
  @height 即将滑向该展示高度
